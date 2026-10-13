@@ -32,3 +32,11 @@ const PASSENGERS=[
 {n:"حسن علي",s:3,tags:["تأخير بالدفع أحيانًا"]}];
 const ME={name:"زهراء محمد"};
 const MYDRIVER={name:"ستار جبار",lineId:"l1"};
+/* رحلات العطل والمناسبات (§3.11) — إعلانات لمرة واحدة */
+const HOLIDAYS=[
+{id:"h1",from:"المنصور",to:"جامعة بغداد",date:"2026-10-16",dlabel:"الجمعة 16 تشرين الأول",time:"08:00",seats:8,free:8,price:6000,comp:"girls",driver:"كريم الساعدي",rating:4.9,rc:301,trusted:true,note:"دوام تعويضي يوم العطلة — الانطلاق من مول المنصور"},
+{id:"h2",from:"الكاظمية",to:"متنزه الزوراء",date:"2026-10-17",dlabel:"السبت 17 تشرين الأول",time:"10:00",seats:14,free:11,price:5000,comp:"mixed",driver:"ستار جبار",rating:4.8,rc:214,trusted:true,note:"رحلة عائلية ترفيهية — العودة 18:00"},
+{id:"h3",from:"الدورة",to:"سوق الكرادة",date:"2026-10-16",dlabel:"الجمعة 16 تشرين الأول",time:"16:00",seats:6,free:5,price:4000,comp:"boys",driver:"أبو علي الكعبي",rating:4.2,rc:96,trusted:false,note:"ذهاب فقط — العودة حسب الاتفاق"}];
+const HOLIDAY_REQUESTS=[
+{id:"hr1",from:"المنصور",to:"جامعة بغداد",date:"2026-10-16",dlabel:"الجمعة 16 تشرين الأول",seats:2,comp:"girls",note:"محاضرة تعويضية يوم الجمعة",by:"طالبة"},
+{id:"hr2",from:"مدينة الصدر",to:"المنصور",date:"2026-10-16",dlabel:"الجمعة 16 تشرين الأول",seats:2,comp:"mixed",note:"موعد مستشفى صباحًا",by:"أبو حسين"}];

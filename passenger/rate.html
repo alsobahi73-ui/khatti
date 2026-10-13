@@ -6,7 +6,7 @@ K.page("تقييم الرحلة","trips.html");
 const tid=new URLSearchParams(location.search).get("trip");
 const trips=K.get("trips",[]);const t=trips.find(x=>x.id===tid);
 if(!t){$("#app").innerHTML=`<div class="bigempty">الرحلة غير موجودة</div>`}
-else{const l=K.line(t.lineId);let stars=0;const tags=new Set();
+else{const l=K.tripLine(t);let stars=0;const tags=new Set();
 $("#app").innerHTML=`
 <div class="card"><div class="route" style="font-weight:800">${l.from} ← ${l.to}</div><div class="mut">السائق: ${l.driver} • ${t.when}</div></div>
 <div class="ok-note">🔒 <b>تقييم أعمى:</b> لن يرى السائق تقييمك حتى يقيّمك هو — قيّم بأمانة وبدون خوف من الانتقام.</div>

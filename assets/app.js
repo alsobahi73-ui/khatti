@@ -38,3 +38,28 @@ K.set("broadcasts",[{t:"تنبيه: غدًا عطلة رسمية — لا توج
 K.set("chat_l1",[{me:0,t:"صباح الخير، أنا عند نقطة ساحة الكاظمية",time:"06:52"},{me:1,t:"صباح النور، قادم خلال ٥ دقائق",time:"06:53"}]);
 K.set("myComments",{});
 })();
+/* رحلات العطل (§3.11) + أدوات الحساب (§3.12) */
+Object.assign(K,{
+hol(id){return HOLIDAYS.concat(this.get("holPosts",[])).find(x=>x.id===id)},
+holFree(h){const o=this.get("holSeats",{})[h.id];return o!==undefined?o:h.free},
+holCard(h,bookFn){const free=this.holFree(h);
+return `<div class="card"><div class="row">${this.badge(h.comp)}${h.trusted?` <span class="trusted">✓ سائق موثوق</span>`:""}<span class="grow"></span><span class="mut">🎉 رحلة لمرة واحدة</span></div>
+<div class="route" style="font-weight:800;margin:6px 0">${this.esc(h.from)} ← ${this.esc(h.to)}</div>
+<div class="mut">📅 ${h.dlabel} — 🕗 ${h.time} • ${this.esc(h.driver)} ${h.rc?this.stars(h.rating)+" "+h.rating+" ("+h.rc+")":"🆕 سائق جديد"}</div>
+${h.note?`<div class="mut" style="margin-top:4px">📝 ${this.esc(h.note)}</div>`:""}
+<div class="row" style="margin-top:8px"><span>💺 <b>${free}</b> مقعدًا شاغرًا</span><span class="grow"></span><b style="color:var(--navy)">${this.fmt(h.price)}<span class="mut">/مقعد</span></b></div>
+${free>0?`<button class="btn btn-a" onclick="${bookFn}('${h.id}')">احجز مقعدًا ✓</button>`:`<div class="danger-note" style="margin:10px 0 0">اكتملت المقاعد لهذه الرحلة</div>`}</div>`},
+holMatch(an,rq){return an.from===rq.from&&an.to===rq.to&&an.date===rq.date&&(rq.comp==="mixed"||an.comp==="mixed"||an.comp===rq.comp)},
+tripLine(t){return t.holId?this.hol(t.holId):this.line(t.lineId)},
+pname(){const m=this.get("me",null);return m?m.name:ME.name},
+dname(){const d=this.get("driver",null);return d?d.name:MYDRIVER.name},
+pushHolNotif(msg,link){const n=this.holNotifs();if(n.some(x=>x.msg===msg))return;n.unshift({msg,link,d:"الآن"});this.set("holNotifs",n)},
+holNotifs(){return this.get("holNotifs",[])},
+holBanner(){const n=this.get("holNotifs",[]);if(!n.length)return;const app=document.getElementById("app");if(!app)return;
+const box=document.createElement("div");
+box.innerHTML=n.map((x,i)=>`<div class="alert ok" style="margin-bottom:8px;cursor:pointer" data-i="${i}"><b>🔔 ${this.esc(x.msg)}</b><small>${x.d} — اضغط للانتقال ✕</small></div>`).join("");
+box.addEventListener("click",e=>{const a=e.target.closest(".alert");if(!a)return;const i=+a.dataset.i;
+const cur=this.get("holNotifs",[]);const rm=cur.splice(i,1)[0];this.set("holNotifs",cur);a.remove();
+if(rm&&rm.link)location.href=rm.link});
+app.prepend(box)}
+});

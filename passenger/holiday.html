@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>رحلات العطل والمناسبات</title><link rel="stylesheet" href="../assets/style.css"></head>
+<body><div class="wrap"><main id="app">
+<div class="tabs"><a class="tab" href="search.html" style="text-decoration:none;color:inherit">🚌 خطوط دائمة</a><span class="tab on">🎉 رحلات العطل</span></div>
+<div class="note">🎉 إعلانات رحلات <b>لمرة واحدة</b> في العطل والمناسبات — تبويب مستقل عن الخطوط الدائمة. الإعلان ينتهي تلقائيًا بعد موعد الرحلة، والحجز بالأسبقية.</div>
+<div id="bookbox"></div>
+<h3 style="margin:4px 0 8px">📢 إعلانات الرحلات</h3>
+<div id="list"></div>
+<div class="card"><h3>📩 اطلب مقاعد لرحلة</h3><p class="mut" style="margin-bottom:8px">لم تجد إعلانًا يناسبك؟ انشر طلبك — سيُشعرك التطبيق فور ظهور إعلان مطابق، ويراه السائقون أيضًا.</p>
+<div class="field"><label>من</label><select id="rfrom"></select></div>
+<div class="field"><label>إلى (وجهة)</label><input id="rto" placeholder="مثال: متنزه الزوراء"></div>
+<div class="field"><label>التاريخ</label><input id="rdate" type="date"></div>
+<div class="field"><label>عدد المقاعد</label><input id="rseats" type="number" min="1" max="20" value="1"></div>
+<div class="field"><label>الصفة المفضلة</label></div>
+<div class="chips" id="rcomp"><button class="chip" data-c="girls">بنات فقط</button><button class="chip" data-c="boys">شباب فقط</button><button class="chip on" data-c="mixed">مختلط</button></div>
+<div class="field"><label>ملاحظة (اختياري)</label><input id="rnote" placeholder="مثال: زيارة عائلية"></div>
+<button class="btn btn-a" id="rsend">نشر الطلب 📩</button></div>
+<h3 style="margin:4px 0 8px">طلباتي المعلقة</h3>
+<div id="myreqs"></div>
+</main></div>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script>
+K.page("رحلات العطل والمناسبات","search.html");
+const today=new Date().toISOString().slice(0,10);
+const anns=()=>HOLIDAYS.concat(K.get("holPosts",[])).filter(h=>h.date>=today);
+let rcomp="mixed";
+$("#rfrom").innerHTML=AREAS.map(a=>`<option>${a}</option>`).join("");
+$("#rdate").min=today;
+$("#rcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#rcomp .chip").forEach(c=>c.classList.remove("on"));b.classList.add("on");rcomp=b.dataset.c});
+function renderList(){const a=anns();$("#list").innerHTML=a.length?a.map(h=>K.holCard(h,"holBook")).join(""):'<div class="bigempty">لا توجد إعلانات حاليًا<br><span class="mut">انشر طلبك وسنُشعرك عند توفر إعلان مطابق</span></div>'}
+function renderReqs(){const r=K.get("holReqs",[]);$("#myreqs").innerHTML=r.length?r.map(x=>`
+<div class="card"><div class="row"><b>${K.esc(x.from)} ← ${K.esc(x.to)}</b><span class="grow"></span>${K.badge(x.comp)}</div>
+<div class="mut">📅 ${x.dlabel} • 💺 ${x.seats} مقاعد ${x.note?"• 📝 "+K.esc(x.note):""}</div>
+<div class="row" style="margin-top:6px"><span class="alert ${x.status==="matched"?"ok":"warn"}" style="padding:4px 10px;font-size:12px">${x.status==="matched"?"✓ يوجد إعلان مطابق":"⏳ بانتظار إعلان مطابق"}</span><span class="grow"></span><button class="btn btn-g btn-s" onclick="delReq('${x.id}')">حذف</button></div></div>`).join(""):'<div class="mut" style="margin-bottom:12px">لم تنشر أي طلب بعد.</div>'}
+function checkMatches(silent){let found=false;const a=anns();const reqs=K.get("holReqs",[]);
+reqs.forEach(r=>{if(r.status!=="pending")return;
+const m=a.find(x=>K.holFree(x)>=r.seats&&K.holMatch(x,r));
+if(m){r.status="matched";found=true;K.pushHolNotif(`إعلان جديد يطابق طلبك! ${r.from} ← ${r.to} — ${K.holFree(m)} مقاعد شاغرة`,"holiday.html")}});
+K.set("holReqs",reqs);if(!silent&&found)K.holBanner();return found}
+function delReq(id){K.set("holReqs",K.get("holReqs",[]).filter(x=>x.id!==id));renderReqs();K.toast("تم حذف الطلب")}
+$("#rsend").onclick=()=>{const to=$("#rto").value.trim(),date=$("#rdate").value,seats=+$("#rseats").value||1;
+if(!to){K.toast("حدد الوجهة");return}if(!date||date<today){K.toast("اختر تاريخًا مستقبليًا");return}
+const d=new Date(date+"T12:00");const dl=d.toLocaleDateString("ar",{weekday:"long",day:"numeric",month:"long"});
+const r=K.get("holReqs",[]);r.unshift({id:"rq"+Date.now(),from:$("#rfrom").value,to,date,dlabel:dl,seats,comp:rcomp,note:$("#rnote").value.trim(),status:"pending",mine:true});
+K.set("holReqs",r);$("#rto").value="";$("#rnote").value="";
+const m=checkMatches(true);
+K.toast(m?"تم نشر طلبك — ووجدنا إعلانًا مطابقًا! 🎉":"تم نشر طلبك — سنُشعرك عند توفر إعلان مطابق 📩");
+renderReqs();K.holBanner()};
+/* حجز */
+let bkId=null,bkSeats=1,bkPay="cash";
+function holBook(id){const h=K.hol(id);const free=K.holFree(h);bkId=id;bkSeats=1;bkPay="cash";
+$("#bookbox").innerHTML=`<div class="card" style="border-color:var(--amber)"><h3>🎫 حجز: ${K.esc(h.from)} ← ${K.esc(h.to)}</h3>
+<div class="mut">📅 ${h.dlabel} — 🕗 ${h.time} • ${K.fmt(h.price)}/مقعد • متاح: ${free}</div>
+<div class="field" style="margin-top:10px"><label>عدد المقاعد</label><input id="bks" type="number" min="1" max="${free}" value="1"></div>
+<div class="field"><label>طريقة الدفع</label></div>
+<label class="radio on" data-p="cash"><input type="radio" name="bp" checked> 💵 كاش — أدفع للسائق</label>
+<label class="radio" data-p="zain"><input type="radio" name="bp"> 📱 Zain Cash — دفع مسبق</label>
+<label class="radio" data-p="asia"><input type="radio" name="bp"> 🏦 آسيا حوالة — دفع مسبق</label>
+<div class="row" style="margin-top:6px"><span class="mut">الإجمالي</span><b class="grow" style="text-align:left;font-size:20px;color:var(--navy)" id="bkt">${K.fmt(h.price)}</b></div>
+<button class="btn btn-a" id="bkok">تأكيد الحجز ✓</button></div>`;
+$("#bks").oninput=e=>{bkSeats=Math.min(Math.max(1,+e.target.value||1),free);e.target.value=bkSeats;$("#bkt").textContent=K.fmt(bkSeats*h.price)};
+$$('#bookbox .radio[data-p]').forEach(r=>r.onclick=()=>{$$('#bookbox .radio[data-p]').forEach(x=>x.classList.remove("on"));r.classList.add("on");bkPay=r.dataset.p});
+$("#bkok").onclick=holConfirm;
+$("#bookbox").scrollIntoView({behavior:"smooth",block:"center"})}
+function holConfirm(){const h=K.hol(bkId);const free=K.holFree(h);if(bkSeats>free){K.toast("المقاعد المتبقية لا تكفي");return}
+const s=K.get("holSeats",{});s[bkId]=free-bkSeats;K.set("holSeats",s);
+const nb={id:"hb"+Date.now(),holId:bkId,when:h.dlabel+" — "+h.time,type:"رحلة عطلة 🎉",pay:{cash:"كاش",zain:"Zain Cash",asia:"آسيا حوالة"}[bkPay],seats:bkSeats,status:"upcoming",rated:false};
+const b=K.get("bookings",[]);b.unshift(nb);K.set("bookings",b);
+const t=K.get("trips",[]);t.unshift(nb);K.set("trips",t);
+K.toast("تم حجز "+bkSeats+" مقعد ✓");setTimeout(()=>location.href="trips.html",900)}
+K.holBanner();renderList();renderReqs();checkMatches(true);K.holBanner();
+</script></body></html>

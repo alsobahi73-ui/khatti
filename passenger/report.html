@@ -3,13 +3,14 @@
 <script src="../assets/data.js"></script><script src="../assets/app.js"></script>
 <script>
 K.page("بلاغ مخالفة","trips.html");
-const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
+const q=new URLSearchParams(location.search);const hol=q.get("hol");const id=q.get("id")||"l1";
+const l=hol?K.hol(hol):K.line(id);
 const trips=K.get("trips",[]).filter(t=>t.status==="done");
 $("#app").innerHTML=`
 <div class="card"><div class="route" style="font-weight:800">${l.from} ← ${l.to}</div><div class="mut">السائق: ${l.driver}</div></div>
 <div class="note">📋 مسار البلاغ: بلاغ ← <b>مراجعة بشرية</b> ← إنذار ← إيقاف مؤقت ← حذف الحساب عند التكرار. لا يُقبل البلاغ إلا من رحلة فعلية موثقة.</div>
 <div class="card"><h3>تفاصيل البلاغ</h3>
-<div class="field"><label>رقم الرحلة الموثقة</label><select id="tref">${trips.length?trips.map(t=>`<option value="${t.id}">رحلة ${t.when} — ${l.from} ← ${l.to}</option>`).join(""):'<option value="">لا توجد رحلة مكتملة (تجريبي: T-1042)</option>'}</select></div>
+<div class="field"><label>رقم الرحلة الموثقة</label><select id="tref">${trips.length?trips.map(t=>{const tl=K.tripLine(t);return `<option value="${t.id}">رحلة ${t.when} — ${tl.from} ← ${tl.to}</option>`}).join(""):'<option value="">لا توجد رحلة مكتملة (تجريبي: T-1042)</option>'}</select></div>
 <div class="field"><label>نوع المخالفة</label><select id="cat">${CATS.map(c=>`<option>${c}</option>`).join("")}</select></div>
 <div class="danger-note" id="serious" style="display:none">⚠️ مخالفة جسيمة — سيُجمّد حساب السائق <b>فورًا</b> لحين انتهاء المراجعة البشرية.</div>
 <div class="field"><label>وصف ما حدث</label><textarea id="txt" placeholder="اشرح باختصار: ماذا حدث؟ متى؟ أين؟"></textarea></div>

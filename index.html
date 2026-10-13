@@ -2,8 +2,10 @@
 <body><div class="wrap">
 <div class="hero"><h1>خَطّي</h1><p>نظّم خطّك — احجز مقعدك — اطمئن على أهلك<br>منصة خطوط النقل للطلبة والموظفين في كل العراق</p><div style="margin-top:8px"><span class="trusted" style="border-color:#e09a12">نموذج تجريبي تفاعلي</span></div></div>
 <main>
+<a class="rolecard" href="register.html" id="rc-reg" style="border:1.5px solid var(--amber)"><span class="ic">📝</span><span><b>سجّل حسابًا جديدًا</b><small>راكب أو سائق — التسجيل إلزامي قبل استخدام التطبيق</small></span><span class="go">←</span></a>
 <a class="rolecard" href="passenger/search.html"><span class="ic">🧑‍🎓</span><span><b>أنا راكب</b><small>ابحث عن خط، احجز مقعدًا، تتبع الباص لحظيًا</small></span><span class="go">←</span></a>
 <a class="rolecard" href="driver/index.html"><span class="ic">🚌</span><span><b>أنا سائق</b><small>أدر خطك ومشتركيك وتقييماتك وتقارير دخلك</small></span><span class="go">←</span></a>
+<a class="rolecard" href="passenger/holiday.html"><span class="ic">🎉</span><span><b>رحلات العطل والمناسبات</b><small>مقاعد شاغرة لرحلات لمرة واحدة — أو اطلب مقاعدك</small></span><span class="go">←</span></a>
 <a class="rolecard" href="parent/index.html"><span class="ic">👨‍👩‍👧</span><span><b>رابط الأهل</b><small>تابع رحلة ابنك لحظيًا — يعمل من المتصفح بلا تثبيت</small></span><span class="go">←</span></a>
 <div class="card"><h3>كيف يعمل؟</h3><div class="steps">
 <div class="step"><b>1</b>سجّل خطك أو ابحث عن خط</div>
@@ -12,4 +14,18 @@
 </div></div>
 <div class="note">💡 <b>الأمان أولًا:</b> منصة مخالفات موثقة + تقييم أعمى + تتبع يعمل فقط أثناء الرحلة + شارة «سائق موثوق».</div>
 </main><footer class="app">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
-</div></body></html>
+</div>
+<script src="assets/data.js"></script><script src="assets/app.js"></script>
+<script>
+/* التسجيل إلزامي (§3.12): بطاقات الأدوار تمر عبر التسجيل ما لم يوجد حساب */
+const me=K.get("me",null),dv=K.get("driver",null);
+if(me||dv){const n=me?me.name:dv.name;
+document.querySelector(".hero").insertAdjacentHTML("beforeend",`<div style="margin-top:8px"><span class="trusted">أهلًا ${K.esc(n)} 👋</span></div>`);
+document.getElementById("rc-reg").style.display="none"}
+document.querySelector('a[href="passenger/search.html"]').href=me?"passenger/search.html":"register.html?role=passenger";
+document.querySelector('a[href="passenger/holiday.html"]').href=me?"passenger/holiday.html":"register.html?role=passenger";
+const dl=document.querySelector('a[href="driver/index.html"]');
+dl.href=(dv&&dv.verified)?"driver/index.html":"register.html?role=driver";
+if(dv&&!dv.verified)dl.querySelector("small").textContent="⏳ حسابك قيد المراجعة — اضغط لإكمال التوثيق";
+</script>
+</body></html>
