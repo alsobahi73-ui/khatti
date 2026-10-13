@@ -11,11 +11,13 @@
 <div class="step"><b>2</b>احجز وتتبع لحظيًا</div>
 <div class="step"><b>3</b>قيّم وبلّغ عن المخالفات</div>
 </div></div>
-<div class="note">💡 <b>الأمان أولًا:</b> منصة مخالفات موثقة + تقييم أعمى + تتبع يعمل فقط أثناء الرحلة + شارة «سائق موثوق».</div>
+<div class="note">💡 <b>الأمان أولًا:</b> محاكاة بلاغات وتقييم وتتبع وشارات؛ لا خدمات أمان حقيقية متصلة بهذا النموذج.</div>
 </main><footer class="app">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
 </div>
-<script src="assets/data.js"></script><script src="assets/app.js"></script>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
 <script>
+(function(){
+if(!K.access())return;
 /* التسجيل إلزامي (§3.12): بطاقات الأدوار تمر عبر التسجيل ما لم يوجد حساب */
 const me=K.get("me",null),dv=K.get("driver",null);
 if(me||dv){const n=me?me.name:dv.name;
@@ -25,5 +27,6 @@ document.querySelector('a[href="passenger/search.html"]').href=me?"passenger/sea
 const dl=document.querySelector('a[href="driver/index.html"]');
 dl.href=(dv&&dv.verified)?"driver/index.html":"register.html?role=driver";
 if(dv&&!dv.verified)dl.querySelector("small").textContent="⏳ حسابك قيد المراجعة — اضغط لإكمال التوثيق";
+})();
 </script>
 </body></html>
