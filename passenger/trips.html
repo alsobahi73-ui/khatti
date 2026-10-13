@@ -1,0 +1,18 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>رحلاتي</title><link rel="stylesheet" href="../assets/style.css"></head>
+<body><div class="wrap"><main id="app"></main></div>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script>
+K.page("رحلاتي","search.html");
+const trips=K.get("trips",[]);const app=$("#app");
+if(!trips.length){app.innerHTML=`<div class="bigempty"><div class="ic">🎫</div>لا توجد رحلات بعد<br><a class="btn btn-p" href="search.html" style="margin-top:12px">ابحث عن خط</a></div>`}
+else app.innerHTML=trips.map(t=>{const l=K.line(t.lineId);return `
+<div class="card"><div class="row">${K.badge(l.comp)}<span class="grow"></span><span class="mut">${t.when}</span></div>
+<div style="font-weight:800;margin:6px 0">${l.from} ← ${l.to}</div>
+<div class="mut">${l.driver} • ${t.type||""}</div>
+<div class="row" style="margin-top:8px">
+${t.status==="upcoming"?`<a class="btn btn-p btn-s" href="tracking.html?id=${l.id}">تتبع</a>`:""}
+${t.status==="done"&&!t.rated?`<a class="btn btn-a btn-s" href="rate.html?trip=${t.id}">قيّم الرحلة</a>`:""}
+${t.status==="done"&&t.rated?`<span class="mut">تم التقييم ✓</span>`:""}
+${t.status==="done"?`<a class="btn btn-g btn-s" href="report.html?id=${l.id}">بلاغ مخالفة</a>`:""}
+</div></div>`}).join("")+`<a class="btn btn-g" href="search.html">+ حجز رحلة جديدة</a>`;
+</script></body></html>

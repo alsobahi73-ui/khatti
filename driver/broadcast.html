@@ -1,0 +1,19 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>بث جماعي</title><link rel="stylesheet" href="../assets/style.css"></head>
+<body><div class="wrap"><main id="app"></main></div>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script>
+K.page("بث جماعي","index.html");
+const l=K.line(MYDRIVER.lineId);
+function render(){const b=K.get("broadcasts",[]);
+$("#app").innerHTML=`
+<div class="card"><h3>📢 إعلان لركاب الرحلة</h3>
+<div class="mut">سيصل إلى <b>${l.seats-l.free} مشتركًا</b> في خط ${l.from} ← ${l.to} — بدل 18 محادثة منفصلة.</div>
+<div class="field" style="margin-top:10px"><textarea id="txt" placeholder="مثال: الباص تعطل صباحًا — البديل قادم خلال ٢٠ دقيقة"></textarea></div>
+<div class="qr"><button data-q="تأخرت ١٠ دقائق بسبب الازدحام">تأخرت ١٠ دقائق بسبب الازدحام</button><button data-q="غدًا عطلة — لا توجد رحلات">غدًا عطلة — لا توجد رحلات</button><button data-q="تم تغيير نقطة الالتقاط الثانية">تم تغيير نقطة الالتقاط الثانية</button></div>
+<button class="btn btn-p" id="send">إرسال للجميع 📢</button></div>
+<div class="card"><h3>إعلانات سابقة</h3>${b.length?b.map(x=>`<div class="alert" style="margin-bottom:8px">${K.esc(x.t)}<small>${x.d}</small></div>`).join(""):'<div class="mut">لا توجد إعلانات بعد.</div>'}</div>`;
+$$(".qr [data-q]").forEach(q=>q.onclick=()=>{$("#txt").value=q.dataset.q});
+$("#send").onclick=()=>{const v=$("#txt").value.trim();if(!v){K.toast("اكتب نص الإعلان أولًا");return}
+const b=K.get("broadcasts",[]);b.unshift({t:v,d:"الآن"});K.set("broadcasts",b);K.toast(`تم الإرسال إلى ${l.seats-l.free} مشتركًا ✓`);render()}}
+render();
+</script></body></html>

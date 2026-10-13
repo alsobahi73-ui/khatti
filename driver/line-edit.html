@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>إدارة الخط</title><link rel="stylesheet" href="../assets/style.css"></head>
+<body><div class="wrap"><main id="app"></main></div>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script>
+K.page("إدارة الخط","index.html");
+const l=K.line(MYDRIVER.lineId);
+$("#app").innerHTML=`
+<div class="card"><h3>⚙️ بيانات الخط</h3>
+<div class="field"><label>صفة الخط</label><select id="comp">
+<option value="girls" ${l.comp==="girls"?"selected":""}>بنات فقط</option>
+<option value="boys" ${l.comp==="boys"?"selected":""}>شباب فقط</option>
+<option value="mixed" ${l.comp==="mixed"?"selected":""}>مختلط</option></select></div>
+<div class="danger-note" id="compwarn" style="display:none">⚠️ تغيير صفة الخط سيرسل <b>تنبيهًا فوريًا لجميع المشتركين</b> — والإعلان الكاذب عن الصفة مخالفة جسيمة.</div>
+<div class="row"><div class="field grow"><label>وقت الذهاب</label><input id="go" value="${l.go}"></div>
+<div class="field grow"><label>وقت الإياب</label><input id="back" value="${l.back}"></div></div>
+<div class="row"><div class="field grow"><label>عدد المقاعد</label><input id="seats" type="number" value="${l.seats}"></div>
+<div class="field grow"><label>الاشتراك الشهري (د.ع)</label><input id="price" type="number" value="${l.price}"></div></div>
+<div class="field"><label>نقاط الالتقاط (سطر لكل نقطة)</label><textarea id="pickups">${l.pickups.join("\n")}</textarea></div>
+<div class="field"><label>المركبة</label><input id="veh" value="${l.vehicle}"></div>
+<button class="btn btn-a" id="save">حفظ التعديلات ✓</button></div>`;
+const origComp=l.comp;
+$("#comp").onchange=e=>{$("#compwarn").style.display=e.target.value!==origComp?"block":"none"};
+$("#save").onclick=()=>{const e=K.get("lineEdits",{});const changed=$("#comp").value!==origComp;
+e[MYDRIVER.lineId]={comp:$("#comp").value,go:$("#go").value,back:$("#back").value,seats:+$("#seats").value,price:+$("#price").value,pickups:$("#pickups").value.split("\n").map(s=>s.trim()).filter(Boolean),vehicle:$("#veh").value};
+K.set("lineEdits",e);
+K.toast(changed?"تم الحفظ — أُرسل تنبيه الصفة الجديدة للمشتركين 📢":"تم حفظ التعديلات ✓");
+setTimeout(()=>location.href="index.html",900)};
+</script></body></html>

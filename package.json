@@ -1,0 +1,1 @@
+{"description":"خطّي — منصة خطوط النقل (ويب PWA + موبايل عبر Capacitor)","devDependencies":{"@capacitor/android":"^7.0.0","@capacitor/cli":"^7.0.0","@capacitor/core":"^7.0.0","@capacitor/ios":"^7.0.0"},"name":"khatti","private":true,"scripts":{"mobile:sync":"npm run web:pack && npx cap sync","web:pack":"node scripts/pack-www.js"},"version":"0.1.0"}

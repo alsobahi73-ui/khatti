@@ -1,0 +1,24 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>بلاغ مخالفة</title><link rel="stylesheet" href="../assets/style.css"></head>
+<body><div class="wrap"><main id="app"></main></div>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script>
+K.page("بلاغ مخالفة","trips.html");
+const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
+const trips=K.get("trips",[]).filter(t=>t.status==="done");
+$("#app").innerHTML=`
+<div class="card"><div class="route" style="font-weight:800">${l.from} ← ${l.to}</div><div class="mut">السائق: ${l.driver}</div></div>
+<div class="note">📋 مسار البلاغ: بلاغ ← <b>مراجعة بشرية</b> ← إنذار ← إيقاف مؤقت ← حذف الحساب عند التكرار. لا يُقبل البلاغ إلا من رحلة فعلية موثقة.</div>
+<div class="card"><h3>تفاصيل البلاغ</h3>
+<div class="field"><label>رقم الرحلة الموثقة</label><select id="tref">${trips.length?trips.map(t=>`<option value="${t.id}">رحلة ${t.when} — ${l.from} ← ${l.to}</option>`).join(""):'<option value="">لا توجد رحلة مكتملة (تجريبي: T-1042)</option>'}</select></div>
+<div class="field"><label>نوع المخالفة</label><select id="cat">${CATS.map(c=>`<option>${c}</option>`).join("")}</select></div>
+<div class="danger-note" id="serious" style="display:none">⚠️ مخالفة جسيمة — سيُجمّد حساب السائق <b>فورًا</b> لحين انتهاء المراجعة البشرية.</div>
+<div class="field"><label>وصف ما حدث</label><textarea id="txt" placeholder="اشرح باختصار: ماذا حدث؟ متى؟ أين؟"></textarea></div>
+<div class="field"><label>إرفاق صورة / فيديو (اختياري)</label><input type="file" accept="image/*,video/*"></div>
+<div class="mut" style="font-size:12px;margin-bottom:8px">📍 سيُرفق الموقع والوقت تلقائيًا من سجل الرحلة.</div>
+<button class="btn btn-d" id="send">إرسال البلاغ</button></div>`;
+$("#cat").onchange=e=>{$("#serious").style.display=SERIOUS.includes(e.target.value)?"block":"none"};
+$("#send").onclick=()=>{const cat=$("#cat").value,txt=$("#txt").value.trim();
+ if(!txt){K.toast("اكتب وصفًا مختصرًا لما حدث");return}
+ const r=K.get("reports",[]);r.unshift({id:"r"+Date.now(),line:l.from+" ← "+l.to,cat,txt,d:"الآن",status:SERIOUS.includes(cat)?"🚨 مخالفة جسيمة — حساب السائق مجمّد لحين المراجعة":"قيد المراجعة البشرية"});K.set("reports",r);
+ $("#app").innerHTML=`<div class="bigempty"><div class="ic">📩</div><b>تم استلام بلاغك.</b><br><span class="mut">الحالة: ${r[0].status}<br>رقم البلاغ: ${r[0].id}</span><br><a class="btn btn-p" href="trips.html" style="margin-top:12px">عودة لرحلاتي</a></div>`};
+</script></body></html>
