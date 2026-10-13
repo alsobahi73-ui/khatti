@@ -1,32 +1,38 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تأكيد الحجز</title><link rel="stylesheet" href="../assets/style.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
+(function(){
+if(!K.access())return;
 K.page("تأكيد الحجز","search.html");
 const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
+if(!l){K.missing();return}
 let type="month",pay="cash";
 const app=$("#app");
 function price(){return type==="month"?l.price:l.day}
 app.innerHTML=`
 <div class="card"><div class="row">${K.badge(l.comp)}</div>
-<div class="route" style="font-size:18px;font-weight:800;margin:6px 0">${l.from} ← ${l.to}</div>
-<div class="mut">${l.driver} • ذهاب ${l.go} / إياب ${l.back}</div></div>
+<div class="route" style="font-size:18px;font-weight:800;margin:6px 0">${K.esc(l.from)} ← ${K.esc(l.to)}</div>
+<div class="mut">${K.esc(l.driver)} • ذهاب ${K.esc(l.go)} / إياب ${K.esc(l.back)}</div></div>
 <div class="card"><h3>نوع الحجز</h3>
 <label class="radio" data-t="day"><input type="radio" name="t"> مقعد يومي — ${K.fmt(l.day)}</label>
 <label class="radio on" data-t="month"><input type="radio" name="t" checked> اشتراك شهري — ${K.fmt(l.price)}</label>
-<div class="field" style="margin-top:10px"><label>الاسم</label><input id="nm" value="${K.pname()}"></div>
-<div class="field"><label>رقم الهاتف</label><input id="ph" value="0770 000 0000" dir="ltr" style="text-align:right"></div></div>
+<div class="field" style="margin-top:10px"><label>الاسم</label><input id="nm" value="${K.esc(K.pname())}"></div>
+<div class="field"><label>رقم الهاتف</label><input id="ph" placeholder="07xxxxxxxxx — استخدم رقمًا تجريبيًا" dir="ltr" style="text-align:right"></div></div>
 <div class="card"><h3>طريقة الدفع</h3>
 <label class="radio on" data-p="cash"><input type="radio" name="p" checked> 💵 كاش — أدفع للسائق مباشرة</label>
-<label class="radio" data-p="zain"><input type="radio" name="p"> 📱 Zain Cash — دفع مسبق (سيصلك رقم المحفظة بعد التأكيد)</label>
-<label class="radio" data-p="asia"><input type="radio" name="p"> 🏦 آسيا حوالة — دفع مسبق (سيصلك رقم الحساب بعد التأكيد)</label>
+<label class="radio" data-p="zain"><input type="radio" name="p"> 📱 Zain Cash — محاكاة دفع فقط — لا تحويل أموال</label>
+<label class="radio" data-p="asia"><input type="radio" name="p"> 🏦 آسيا حوالة — محاكاة دفع فقط — لا تحويل أموال</label>
 <div class="note" style="margin-top:10px">يستطيع الأهل دفع اشتراك الأبناء من حساباتهم مباشرة.</div></div>
 <div class="card"><div class="row"><span class="mut">الإجمالي</span><b class="grow" style="text-align:left;font-size:20px;color:var(--navy)" id="tot">${K.fmt(price())}</b></div>
 <button class="btn btn-a" id="ok">تأكيد الحجز ✓</button></div>`;
 $$(".radio[data-t]").forEach(r=>r.onclick=()=>{$$(".radio[data-t]").forEach(x=>x.classList.remove("on"));r.classList.add("on");type=r.dataset.t;$("#tot").textContent=K.fmt(price())});
 $$(".radio[data-p]").forEach(r=>r.onclick=()=>{$$(".radio[data-p]").forEach(x=>x.classList.remove("on"));r.classList.add("on");pay=r.dataset.p});
-$("#ok").onclick=()=>{const b=K.get("bookings",[]);const nb={id:"b"+Date.now(),lineId:id,when:"اليوم — "+l.go,type:type==="month"?"اشتراك شهري":"مقعد يومي",pay:{cash:"كاش",zain:"Zain Cash",asia:"آسيا حوالة"}[pay],status:"upcoming"};
-b.unshift(nb);K.set("bookings",b);
-const trips=K.get("trips",[]);trips.unshift({id:nb.id,lineId:id,when:"اليوم — "+l.go,status:"upcoming",rated:false});K.set("trips",trips);
-K.toast("تم الحجز بنجاح ✓");setTimeout(()=>location.href="trips.html",900)};
+$("#ok").onclick=()=>{if(!KhattiCore.name($("#nm").value)||!KhattiCore.phone($("#ph").value)){K.toast("أدخل اسمًا ورقمًا عراقيًا صحيحين للعرض التجريبي");return}
+if(K.line(id).free<1){K.toast("لا توجد مقاعد متاحة");return}
+const b=K.get("bookings",[]);const nb={id:"b"+Date.now(),lineId:id,when:"اليوم — "+l.go,type:type==="month"?"اشتراك شهري":"مقعد يومي",pay:{cash:"كاش",zain:"Zain Cash",asia:"آسيا حوالة"}[pay],status:"upcoming"};
+b.unshift(nb);
+const trips=K.get("trips",[]);trips.unshift({id:nb.id,lineId:id,when:"اليوم — "+l.go,status:"upcoming",rated:false});K.commit({bookings:b,trips});
+$("#ok").disabled=true;K.toast("حُفظ حجز تجريبي محليًا؛ لا حجز فعلي ولا دفع");setTimeout(()=>location.href="trips.html",900)};
+})();
 </script></body></html>

@@ -1,26 +1,30 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>دردشة مع السائق</title><link rel="stylesheet" href="../assets/style.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
+(function(){
+if(!K.access())return;
 K.page("دردشة مع السائق","line.html?id="+ (new URLSearchParams(location.search).get("id")||"l1"));
 const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
+if(!l){K.missing();return}
 const key="chat_"+id;let msgs=K.get(key,[]);
 $("#app").innerHTML=`
-<div class="card"><div class="row"><b>${l.driver}</b><span class="grow"></span><button class="btn btn-g btn-s" id="block">🚫 حظر</button></div>
+<div class="card"><div class="row"><b>${K.esc(l.driver)}</b><span class="grow"></span><button class="btn btn-g btn-s" id="block">🚫 حظر</button></div>
 <div class="mut" style="font-size:12px;margin-top:4px">دردشة مجهولة — بلا أرقام هواتف • تُغلق تلقائيًا بعد الرحلة • الرسائل مسجلة وقابلة للإبلاغ</div></div>
 <div class="card"><div class="chatbox" id="box"></div>
 <div class="qr"><button data-q="أنا عند نقطة الالتقاط 📍">أنا عند نقطة الالتقاط 📍</button><button data-q="سأتأخر ٥ دقائق">سأتأخر ٥ دقائق</button><button data-q="تم، شكرًا">تم، شكرًا</button><button id="pin">📍 مشاركة موقعي</button></div>
 <div class="chatbar"><input id="inp" placeholder="اكتب رسالة…"><button class="btn btn-p btn-s" id="send">إرسال</button></div></div>`;
 const box=$("#box");
-function render(){box.innerHTML=msgs.map(m=>`<div class="msg ${m.me?"me":"them"}">${K.esc(m.t)}<small>${m.time}</small></div>`).join("");box.scrollTop=box.scrollHeight}
-function push(me,t){const time=new Date().toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"});msgs.push({me,t,time});K.set(key,msgs);render()}
+function render(){box.innerHTML=msgs.map(m=>`<div class="msg ${m.me?"me":"them"}">${K.esc(m.t)}<small>${K.esc(m.time)}</small></div>`).join("");box.scrollTop=box.scrollHeight}
+function push(me,t){if(blocked)return;const time=new Date().toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"});msgs.push({me,t,time});K.set(key,msgs);render()}
 const canned=["تمام، وصلت","على الطريق — ٥ دقائق","شفتك، قادم إليك"];
-let ci=0;
+let ci=0,blocked=false;
 function dreply(){setTimeout(()=>{push(0,canned[ci++%canned.length])},1800)}
 $$(".qr [data-q]").forEach(b=>b.onclick=()=>{push(1,b.dataset.q);dreply()});
-$("#pin").onclick=()=>{push(1,"📍 [موقعي الحالي — دبوس مشارك]");dreply()};
+$("#pin").onclick=()=>{push(1,"📍 [دبوس تجريبي؛ لم يُحدد أو يُشارك موقع حقيقي]");dreply()};
 $("#send").onclick=()=>{const v=$("#inp").value.trim();if(!v)return;$("#inp").value="";push(1,v);dreply()};
 $("#inp").addEventListener("keydown",e=>{if(e.key==="Enter")$("#send").click()});
-$("#block").onclick=()=>{K.toast("تم حظر الرسائل من هذا السائق 🚫 (الرحلة مستمرة)")};
+$("#block").onclick=()=>{blocked=true;$("#send").disabled=true;K.toast("تم حظر الرسائل من هذا السائق 🚫 (الرحلة مستمرة)")};
 render();
+})();
 </script></body></html>

@@ -1,12 +1,14 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>لوحة السائق</title><link rel="stylesheet" href="../assets/style.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
+(function(){
+if(!K.access())return;
 K.page("لوحة السائق","../index.html");
 const l=K.line(MYDRIVER.lineId);
 $("#app").innerHTML=`
 <div class="card"><div class="mut">أهلًا ${MYDRIVER.name} 👋</div>
-<div class="route" style="font-size:18px;font-weight:800;margin:6px 0">خطّي: ${l.from} ← ${l.to}</div>
+<div class="route" style="font-size:18px;font-weight:800;margin:6px 0">خطّي: ${K.esc(l.from)} ← ${K.esc(l.to)}</div>
 <div class="row">${K.badge(l.comp)}${K.trusted(l)}</div></div>
 <div class="stats">
 <div class="stat"><b>${l.seats-l.free}</b><span>مشترك</span></div>
@@ -24,4 +26,5 @@ ${DEMAND.map(d=>`<div class="alert" style="margin-bottom:8px"><b>${d.n} راكب
 <a class="btn btn-g" href="broadcast.html">📢 بث جماعي للركاب</a>
 <a class="btn btn-g" href="holiday-post.html">🎉 رحلات العطل — أعلن مقاعد شاغرة</a>
 <a class="btn btn-g" href="ratings.html">⭐ التقييمات والتعليقات (${l.comments.filter(c=>!c.r).length} بانتظار الرد)</a></div>`;
+})();
 </script></body></html>

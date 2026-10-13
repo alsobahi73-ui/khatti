@@ -16,8 +16,10 @@
 <div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">احفظ طلبك وسنُشعرك فور توفر خط يطابقك — صلاحية الطلب 30 يومًا.</p><button class="btn btn-a" id="notifybtn">🔔 أعلمني عند التوفر</button></div>
 </main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
+(function(){
+if(!K.access())return;
 K.page("بحث عن خط","../index.html");
 const area=$("#area"),uni=$("#uni");
 AREAS.forEach(a=>area.insertAdjacentHTML("beforeend",`<option>${a}</option>`));
@@ -32,16 +34,16 @@ function doSearch(){
  if(area.value)ls=ls.filter(l=>l.from===area.value);
  if(uni.value)ls=ls.filter(l=>l.to===uni.value);
  if(fc)ls=ls.filter(l=>l.comp===fc);
- if(pin){ls=ls.map(l=>({...l,_d:K.dist(pin,l.route[0])})).sort((a,b)=>a._d-b._d);
-  box.innerHTML='<div class="note">📍 مرتبة حسب القرب من دبوسك'+(ls[0]?` — أقرب خط على بعد ${ls[0]._d.toFixed(1)} كم`:"")+'</div>'}
+ ls=KhattiCore.sortLines(ls,pin);
+ const distanceNote=pin?'<div class="note">📍 مرتبة حسب القرب من بداية المسار التجريبي'+(ls[0]?` — أقرب خط على بعد ${ls[0]._d.toFixed(1)} كم`:"")+'</div>':"";
  if(!ls.length){nt.style.display="block";return}
  nt.style.display="none";
- ls.sort((a,b)=>(b.trusted-a.trusted)||(b.rating-a.rating));
- box.innerHTML=ls.map(l=>K.lineCard(l)).join("");
+ box.innerHTML=distanceNote+ls.map(l=>K.lineCard(l)).join("");
 }
 $("#pinmode").onclick=()=>{const b=$("#pinbox");b.style.display=b.style.display==="none"?"block":"none";
  if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",[33.315,44.38],11);
   if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}};
-$("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:$("#gov").value,area:area.value,uni:uni.value,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("تم حفظ طلبك — سنُشعرك عند توفر خط مطابق 🔔")};
+$("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:$("#gov").value,area:area.value,uni:uni.value,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("حُفظ طلب تجريبي محليًا؛ لا تُرسل إشعارات فعلية")};
 doSearch();
+})();
 </script></body></html>
