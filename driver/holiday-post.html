@@ -18,20 +18,18 @@
 <div class="mut" style="margin-bottom:8px">ركاب يطلبون مقاعد — قدّم عرضًا بإعلان يطابق طلبهم.</div>
 <div id="reqs"></div>
 </main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
 <script>
-(function(){
-if(!K.access())return;
 K.page("رحلات العطل — السائق","index.html");
-const today=KhattiCore.today();
+const today=new Date().toISOString().slice(0,10);
 let pcomp="mixed";
 $("#pfrom").innerHTML=AREAS.map(a=>`<option>${a}</option>`).join("");
 $("#pdate").min=today;
 $("#pcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#pcomp .chip").forEach(c=>c.classList.remove("on"));b.classList.add("on");pcomp=b.dataset.c});
-function myPosts(){return K.get("holPosts",[]).filter(h=>KhattiCore.future(h.date,h.time))}
+function myPosts(){return K.get("holPosts",[]).filter(h=>h.date>=today)}
 function allReqs(){return HOLIDAY_REQUESTS.concat(K.get("holReqs",[]))}
 function renderPosts(){const p=myPosts();$("#myposts").innerHTML=p.length?p.map(h=>`
-<div class="card"><div class="row">${K.badge(h.comp)}<span class="grow"></span><span class="mut">📅 ${K.esc(h.dlabel)} — 🕗 ${K.esc(h.time)}</span></div>
+<div class="card"><div class="row">${K.badge(h.comp)}<span class="grow"></span><span class="mut">📅 ${h.dlabel} — 🕗 ${h.time}</span></div>
 <div style="font-weight:800;margin:4px 0">${K.esc(h.from)} ← ${K.esc(h.to)}</div>
 <div class="mut">💺 ${K.holFree(h)} من ${h.seats} مقاعد شاغرة • ${K.fmt(h.price)}/مقعد</div>
 <button class="btn btn-g btn-s" style="margin-top:8px" onclick="delPost('${h.id}')">إلغاء الإعلان</button></div>`).join(""):'<div class="mut" style="margin-bottom:12px">لا توجد إعلانات نشطة.</div>'}
@@ -39,7 +37,7 @@ function renderReqs(){const posts=myPosts();$("#reqs").innerHTML=allReqs().map(r
 const matched=posts.some(p=>K.holMatch(p,r));
 return `<div class="card"><div class="row">${K.badge(r.comp)}<span class="grow"></span>${matched?'<span class="alert ok" style="padding:4px 10px;font-size:12px">✓ يطابق إعلانك</span>':'<span class="mut" style="font-size:12px">⏳ معلق</span>'}</div>
 <div style="font-weight:800;margin:4px 0">${K.esc(r.from)} ← ${K.esc(r.to)}</div>
-<div class="mut">📅 ${K.esc(r.dlabel)} • 💺 ${r.seats} مقاعد ${r.note?"• 📝 "+K.esc(r.note):""}${r.by?" • 👤 "+K.esc(r.by):""}</div>
+<div class="mut">📅 ${r.dlabel} • 💺 ${r.seats} مقاعد ${r.note?"• 📝 "+K.esc(r.note):""}${r.by?" • 👤 "+K.esc(r.by):""}</div>
 <button class="btn btn-p btn-s" style="margin-top:8px" onclick="offer('${r.id}')">قدّم عرض 📢</button></div>`}).join("")}
 function delPost(id){K.set("holPosts",K.get("holPosts",[]).filter(x=>x.id!==id));const s=K.get("holSeats",{});delete s[id];K.set("holSeats",s);renderPosts();renderReqs();K.toast("تم إلغاء الإعلان")}
 function offer(rid){const r=allReqs().find(x=>x.id===rid);if(!r)return;
@@ -48,26 +46,22 @@ $$("#pcomp .chip").forEach(c=>c.classList.toggle("on",c.dataset.c===r.comp));pco
 $("#pnote").value="عرض مطابِق لطلبك ✅";
 K.toast("تم تعبئة النموذج من الطلب — حدد السعر والوقت وانشر");window.scrollTo({top:0,behavior:"smooth"})}
 $("#ppub").onclick=()=>{const to=$("#pto").value.trim(),date=$("#pdate").value,seats=+$("#pseats").value||0,price=+$("#pprice").value||0;
-if(!to||to.length>120){K.toast("حدد الوجهة");return}if(!KhattiCore.future(date)){K.toast("اختر تاريخًا مستقبليًا");return}if(!KhattiCore.integer(seats,1,60)||!KhattiCore.integer(price,0,10000000)||!KhattiCore.future(date,$("#ptime").value)){K.toast("حدد عدد المقاعد");return}
+if(!to){K.toast("حدد الوجهة");return}if(!date||date<today){K.toast("اختر تاريخًا مستقبليًا");return}if(seats<1){K.toast("حدد عدد المقاعد");return}
 const d=new Date(date+"T12:00");const dl=d.toLocaleDateString("ar",{weekday:"long",day:"numeric",month:"long"});
 const dv=K.get("driver",null);
 const h={id:"hp"+Date.now(),from:$("#pfrom").value,to,date,dlabel:dl,time:$("#ptime").value,seats,free:seats,price,comp:pcomp,
-driver:K.dname(),rating:0,rc:0,trusted:false,note:$("#pnote").value.trim(),mine:true};
+driver:K.dname(),rating:dv&&dv.verified?4.5:5.0,rc:dv&&dv.verified?8:0,trusted:!!(dv&&dv.verified),note:$("#pnote").value.trim(),mine:true};
 const p=K.get("holPosts",[]);p.unshift(h);K.set("holPosts",p);
 const m=allReqs().filter(r=>K.holMatch(h,r));
 if(m.length)K.pushHolNotif(`طلب جديد يطابق إعلانك! ${m.length} ${m.length===1?"طلب":"طلبات"}: ${h.from} ← ${h.to}`,"holiday-post.html");
 $("#pto").value="";$("#pnote").value="";
-K.toast(m.length?"حُفظ الإعلان وطابق طلبات تجريبية محلية":"حُفظ الإعلان محليًا فقط");
+K.toast(m.length?"تم نشر الإعلان — ووجدنا طلبات مطابقة! 🎉":"تم نشر الإعلان 📢");
 renderPosts();renderReqs();K.holBanner()};
 /* مطابقة حية عند الفتح: إعلاناتي × طلبات الركاب */
 (function(){const posts=myPosts();if(!posts.length)return;
 const hits=[];allReqs().forEach(r=>{const p=posts.find(x=>K.holMatch(x,r));if(p&&!hits.some(z=>z.r.id===r.id))hits.push({r,p})});
 const app=$("#app");
 hits.slice(0,3).forEach(({r,p})=>{const a=document.createElement("div");a.className="alert ok";a.style.marginBottom="8px";
-a.innerHTML=`<b>📩 طلب يطابق إعلانك:</b> ${K.esc(r.from)} ← ${K.esc(r.to)} — ${r.seats} مقاعد (${K.esc(r.dlabel)})<small>إعلانك: ${p.dlabel} — ${p.time}</small>`;app.prepend(a)})})();
+a.innerHTML=`<b>📩 طلب يطابق إعلانك:</b> ${K.esc(r.from)} ← ${K.esc(r.to)} — ${r.seats} مقاعد (${r.dlabel})<small>إعلانك: ${p.dlabel} — ${p.time}</small>`;app.prepend(a)})})();
 K.holBanner();renderPosts();renderReqs();
-
-window.delPost=delPost;
-window.offer=offer;
-})();
 </script></body></html>

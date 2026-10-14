@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#123a5c"><link rel="manifest" href="manifest.json"><title>خطّي — Khatti</title><link rel="stylesheet" href="assets/style.css"></head>
 <body><div class="wrap">
-<div class="hero"><h1>خَطّي</h1><p>نظّم خطّك — احجز مقعدك — اطمئن على أهلك<br>منصة خطوط النقل للطلبة والموظفين في كل العراق</p><div style="margin-top:8px"><span class="trusted" style="border-color:#e09a12">نموذج تجريبي تفاعلي</span></div></div>
+<div class="hero"><h1>خَطّي</h1><p>نظّم خطّك — احجز مقعدك — اطمئن على أهلك<br>منصة خطوط النقل للطلبة والموظفين في كل العراق</p><div style="margin-top:8px"><span class="trusted" style="border-color:#e09a12">🎮 محاكاة واقعية تفاعلية</span></div><p style="font-size:.85rem;opacity:.85;margin-top:6px">جرّب التطبيق كاملًا ببيانات تجريبية — رأيك يصنع النسخة الحقيقية</p></div>
 <main>
 <a class="rolecard" href="register.html" id="rc-reg" style="border:1.5px solid var(--amber)"><span class="ic">📝</span><span><b>سجّل حسابًا جديدًا</b><small>راكب أو سائق — التسجيل إلزامي قبل استخدام التطبيق</small></span><span class="go">←</span></a>
 <a class="rolecard" href="passenger/search.html"><span class="ic">🧑‍🎓</span><span><b>أنا راكب</b><small>ابحث عن خط، احجز مقعدًا، تتبع الباص لحظيًا</small></span><span class="go">←</span></a>
@@ -11,13 +11,11 @@
 <div class="step"><b>2</b>احجز وتتبع لحظيًا</div>
 <div class="step"><b>3</b>قيّم وبلّغ عن المخالفات</div>
 </div></div>
-<div class="note">💡 <b>الأمان أولًا:</b> محاكاة بلاغات وتقييم وتتبع وشارات؛ لا خدمات أمان حقيقية متصلة بهذا النموذج.</div>
+<div class="note">💡 <b>الأمان أولًا:</b> منصة مخالفات موثقة + تقييم أعمى + تتبع يعمل فقط أثناء الرحلة + شارة «سائق موثوق».</div>
 </main><footer class="app">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
 </div>
-<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
+<script src="assets/data.js"></script><script src="assets/app.js"></script>
 <script>
-(function(){
-if(!K.access())return;
 /* التسجيل إلزامي (§3.12): بطاقات الأدوار تمر عبر التسجيل ما لم يوجد حساب */
 const me=K.get("me",null),dv=K.get("driver",null);
 if(me||dv){const n=me?me.name:dv.name;
@@ -27,6 +25,5 @@ document.querySelector('a[href="passenger/search.html"]').href=me?"passenger/sea
 const dl=document.querySelector('a[href="driver/index.html"]');
 dl.href=(dv&&dv.verified)?"driver/index.html":"register.html?role=driver";
 if(dv&&!dv.verified)dl.querySelector("small").textContent="⏳ حسابك قيد المراجعة — اضغط لإكمال التوثيق";
-})();
 </script>
 </body></html>

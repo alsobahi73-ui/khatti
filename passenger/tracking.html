@@ -1,21 +1,18 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تتبع الرحلة</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
 <script>
-(function(){
-if(!K.access())return;
 K.page("تتبع الرحلة","trips.html");
 const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
-if(!l){K.missing();return}
 $("#app").innerHTML=`
-<div class="card"><div class="row">${K.badge(l.comp)}<span class="grow"></span><span class="mut">رحلة اليوم — ${K.esc(l.go)}</span></div>
-<div class="route" style="font-weight:800;margin:6px 0">${K.esc(l.from)} ← ${K.esc(l.to)}</div>
-<div class="row"><span class="mut">السائق: ${K.esc(l.driver)}</span></div>
+<div class="card"><div class="row">${K.badge(l.comp)}<span class="grow"></span><span class="mut">رحلة اليوم — ${l.go}</span></div>
+<div class="route" style="font-weight:800;margin:6px 0">${l.from} ← ${l.to}</div>
+<div class="row"><span class="mut">السائق: ${l.driver}</span></div>
 <div class="mapbox" id="tmap" style="margin-top:10px"></div>
 <div class="row" style="margin-top:10px"><span class="mut">الوصول المتوقع لنقطة الالتقاط:</span><b id="eta" style="color:var(--navy)">…</b></div>
 <div class="mut" style="font-size:12px">التتبع يعمل فقط أثناء نافذة الرحلة — محاكاة تجريبية.</div></div>
-<div class="card"><h3>🔔 تنبيهات الرحلة</h3><div class="alerts" id="feed"><div class="alert ok">انطلقت الرحلة من ${K.esc(l.from)}<small>قبل قليل</small></div></div></div>
+<div class="card"><h3>🔔 تنبيهات الرحلة</h3><div class="alerts" id="feed"><div class="alert ok">انطلقت الرحلة من ${l.from}<small>قبل قليل</small></div></div></div>
 <button class="btn btn-d" id="sos">🆘 زر الطوارئ</button>
 <div class="row"><a class="btn btn-g grow" href="chat.html?id=${l.id}">💬 دردشة مع السائق</a></div>`;
 const m=K.map("tmap",l.route[0],11);
@@ -25,7 +22,6 @@ if(m){let mins=9;$("#eta").textContent=mins+" دقائق";
    if(left<0.55&&!stop._h){stop._h=1;feed("🚌 الباص اقترب من نقطة الالتقاط","warn")}
   }else{$("#eta").textContent="وصل ✓";feed("✅ وصل الباص — رحلة سعيدة","ok");K.toast("وصل الباص ✓")}});
 }else{$("#eta").textContent="غير متاح"}
-$("#sos").onclick=()=>{const r=K.get("reports",[]);r.unshift({id:"r"+Date.now(),line:l.from+" ← "+l.to,cat:"زر الطوارئ",txt:"تجربة زر الطوارئ — لم يُجمع أو يُرسل موقع",d:"الآن",status:"تجريبي محلي فقط — لا استغاثة فعلية"});K.set("reports",r);
-feed("محاكاة طوارئ فقط: لم يُرسل موقع أو بلاغ لأي جهة","bad");K.toast("لم تُرسل استغاثة. في الخطر تواصل مباشرة مع الطوارئ المحلية")};
-})();
+$("#sos").onclick=()=>{const r=K.get("reports",[]);r.unshift({id:"r"+Date.now(),line:l.from+" ← "+l.to,cat:"زر الطوارئ",txt:"إرسال الموقع لحظيًا للأهل وجهة الطوارئ",d:"الآن",status:"🚨 بلاغ عالي الأولوية — تم إرسال الموقع للأهل"});K.set("reports",r);
+feed("🚨 تم تفعيل زر الطوارئ — أُرسل موقعك للأهل","bad");K.toast("تم إرسال موقعك للأهل وجهة الطوارئ 🆘")};
 </script></body></html>

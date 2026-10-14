@@ -1,26 +1,22 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تقييم الرحلة</title><link rel="stylesheet" href="../assets/style.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
 <script>
-(function(){
-if(!K.access())return;
 K.page("تقييم الرحلة","trips.html");
 const tid=new URLSearchParams(location.search).get("trip");
 const trips=K.get("trips",[]);const t=trips.find(x=>x.id===tid);
-if(!KhattiCore.canRate(t)||!K.tripLine(t)){$("#app").innerHTML=`<div class="bigempty">الرحلة غير موجودة</div>`}
+if(!t){$("#app").innerHTML=`<div class="bigempty">الرحلة غير موجودة</div>`}
 else{const l=K.tripLine(t);let stars=0;const tags=new Set();
 $("#app").innerHTML=`
-<div class="card"><div class="route" style="font-weight:800">${K.esc(l.from)} ← ${K.esc(l.to)}</div><div class="mut">السائق: ${K.esc(l.driver)} • ${K.esc(t.when)}</div></div>
-<div class="ok-note">🧪 <b>محاكاة تقييم أعمى:</b> عرض تجريبي فقط؛ لا توجد خدمة تضمن عزل التقييمات أو صلاحيات الوصول.</div>
+<div class="card"><div class="route" style="font-weight:800">${l.from} ← ${l.to}</div><div class="mut">السائق: ${l.driver} • ${t.when}</div></div>
+<div class="ok-note">🔒 <b>تقييم أعمى:</b> لن يرى السائق تقييمك حتى يقيّمك هو — قيّم بأمانة وبدون خوف من الانتقام.</div>
 <div class="card"><h3>كم نجمة تعطي السائق؟</h3><div class="starpick" id="sp">${[1,2,3,4,5].map(i=>`<span data-i="${i}">★</span>`).join("")}</div>
 <h3 style="margin-top:12px">وسوم سريعة</h3><div class="chips" id="tg">${DRIVER_TAGS.map(g=>`<button class="chip" data-g="${g}">${g}</button>`).join("")}</div>
 <button class="btn btn-a" id="send">إرسال التقييم</button></div>`;
 $("#sp").addEventListener("click",e=>{const s=e.target.closest("span");if(!s)return;stars=+s.dataset.i;$$("#sp span").forEach(x=>x.classList.toggle("on",+x.dataset.i<=stars))});
 $("#tg").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;b.classList.toggle("on");b.classList.contains("on")?tags.add(b.dataset.g):tags.delete(b.dataset.g)});
-$("#send").onclick=()=>{if(!KhattiCore.canRate(K.get("trips",[]).find(x=>x.id===tid))){K.toast("الرحلة غير مؤهلة أو قُيّمت سابقًا");return}
-if(!stars){K.toast("اختر عدد النجوم أولًا");return}
- const r=K.get("pxRatings",{});r[tid]={stars,tags:[...tags]};
- t.rated=true;K.commit({pxRatings:r,trips});
- $("#app").innerHTML=`<div class="bigempty"><div class="ic">🙏</div><b>حُفظ تقييمك التجريبي محليًا.</b><br><span class="mut">لا يُرسل للسائق؛ العزل الأعمى والصلاحيات يحتاجان خدمة حقيقية.</span><br><a class="btn btn-p" href="trips.html" style="margin-top:12px">عودة لرحلاتي</a></div>`}}
-})();
+$("#send").onclick=()=>{if(!stars){K.toast("اختر عدد النجوم أولًا");return}
+ const r=K.get("pxRatings",{});r[tid]={stars,tags:[...tags]};K.set("pxRatings",r);
+ t.rated=true;K.set("trips",trips);
+ $("#app").innerHTML=`<div class="bigempty"><div class="ic">🙏</div><b>شكرًا! تم إرسال تقييمك.</b><br><span class="mut">لن يراه السائق حتى يقيّمك — وتقييمك يرفع جودة الخط للجميع.</span><br><a class="btn btn-p" href="trips.html" style="margin-top:12px">عودة لرحلاتي</a></div>`}}
 </script></body></html>

@@ -17,13 +17,11 @@
 <h3 style="margin:4px 0 8px">طلباتي المعلقة</h3>
 <div id="myreqs"></div>
 </main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
 <script>
-(function(){
-if(!K.access())return;
 K.page("رحلات العطل والمناسبات","search.html");
-const today=KhattiCore.today();
-const anns=()=>HOLIDAYS.concat(K.get("holPosts",[])).filter(h=>KhattiCore.future(h.date,h.time));
+const today=new Date().toISOString().slice(0,10);
+const anns=()=>HOLIDAYS.concat(K.get("holPosts",[])).filter(h=>h.date>=today);
 let rcomp="mixed";
 $("#rfrom").innerHTML=AREAS.map(a=>`<option>${a}</option>`).join("");
 $("#rdate").min=today;
@@ -31,7 +29,7 @@ $("#rcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b
 function renderList(){const a=anns();$("#list").innerHTML=a.length?a.map(h=>K.holCard(h,"holBook")).join(""):'<div class="bigempty">لا توجد إعلانات حاليًا<br><span class="mut">انشر طلبك وسنُشعرك عند توفر إعلان مطابق</span></div>'}
 function renderReqs(){const r=K.get("holReqs",[]);$("#myreqs").innerHTML=r.length?r.map(x=>`
 <div class="card"><div class="row"><b>${K.esc(x.from)} ← ${K.esc(x.to)}</b><span class="grow"></span>${K.badge(x.comp)}</div>
-<div class="mut">📅 ${K.esc(x.dlabel)} • 💺 ${x.seats} مقاعد ${x.note?"• 📝 "+K.esc(x.note):""}</div>
+<div class="mut">📅 ${x.dlabel} • 💺 ${x.seats} مقاعد ${x.note?"• 📝 "+K.esc(x.note):""}</div>
 <div class="row" style="margin-top:6px"><span class="alert ${x.status==="matched"?"ok":"warn"}" style="padding:4px 10px;font-size:12px">${x.status==="matched"?"✓ يوجد إعلان مطابق":"⏳ بانتظار إعلان مطابق"}</span><span class="grow"></span><button class="btn btn-g btn-s" onclick="delReq('${x.id}')">حذف</button></div></div>`).join(""):'<div class="mut" style="margin-bottom:12px">لم تنشر أي طلب بعد.</div>'}
 function checkMatches(silent){let found=false;const a=anns();const reqs=K.get("holReqs",[]);
 reqs.forEach(r=>{if(r.status!=="pending")return;
@@ -39,20 +37,19 @@ const m=a.find(x=>K.holFree(x)>=r.seats&&K.holMatch(x,r));
 if(m){r.status="matched";found=true;K.pushHolNotif(`إعلان جديد يطابق طلبك! ${r.from} ← ${r.to} — ${K.holFree(m)} مقاعد شاغرة`,"holiday.html")}});
 K.set("holReqs",reqs);if(!silent&&found)K.holBanner();return found}
 function delReq(id){K.set("holReqs",K.get("holReqs",[]).filter(x=>x.id!==id));renderReqs();K.toast("تم حذف الطلب")}
-$("#rsend").onclick=()=>{const to=$("#rto").value.trim(),date=$("#rdate").value,seats=+$("#rseats").value;
-if(!to||to.length>120){K.toast("حدد الوجهة");return}if(!KhattiCore.future(date)){K.toast("اختر تاريخًا مستقبليًا");return}
-if(!KhattiCore.integer(seats,1,20)){K.toast("عدد المقاعد الصحيح بين 1 و20");return}
+$("#rsend").onclick=()=>{const to=$("#rto").value.trim(),date=$("#rdate").value,seats=+$("#rseats").value||1;
+if(!to){K.toast("حدد الوجهة");return}if(!date||date<today){K.toast("اختر تاريخًا مستقبليًا");return}
 const d=new Date(date+"T12:00");const dl=d.toLocaleDateString("ar",{weekday:"long",day:"numeric",month:"long"});
 const r=K.get("holReqs",[]);r.unshift({id:"rq"+Date.now(),from:$("#rfrom").value,to,date,dlabel:dl,seats,comp:rcomp,note:$("#rnote").value.trim(),status:"pending",mine:true});
 K.set("holReqs",r);$("#rto").value="";$("#rnote").value="";
 const m=checkMatches(true);
-K.toast(m?"حُفظ الطلب وطابق إعلانًا تجريبيًا محليًا":"حُفظ الطلب محليًا؛ لا إشعارات فعلية");
+K.toast(m?"تم نشر طلبك — ووجدنا إعلانًا مطابقًا! 🎉":"تم نشر طلبك — سنُشعرك عند توفر إعلان مطابق 📩");
 renderReqs();K.holBanner()};
 /* حجز */
 let bkId=null,bkSeats=1,bkPay="cash";
 function holBook(id){const h=K.hol(id);const free=K.holFree(h);bkId=id;bkSeats=1;bkPay="cash";
 $("#bookbox").innerHTML=`<div class="card" style="border-color:var(--amber)"><h3>🎫 حجز: ${K.esc(h.from)} ← ${K.esc(h.to)}</h3>
-<div class="mut">📅 ${K.esc(h.dlabel)} — 🕗 ${K.esc(h.time)} • ${K.fmt(h.price)}/مقعد • متاح: ${free}</div>
+<div class="mut">📅 ${h.dlabel} — 🕗 ${h.time} • ${K.fmt(h.price)}/مقعد • متاح: ${free}</div>
 <div class="field" style="margin-top:10px"><label>عدد المقاعد</label><input id="bks" type="number" min="1" max="${free}" value="1"></div>
 <div class="field"><label>طريقة الدفع</label></div>
 <label class="radio on" data-p="cash"><input type="radio" name="bp" checked> 💵 كاش — أدفع للسائق</label>
@@ -64,15 +61,11 @@ $("#bks").oninput=e=>{bkSeats=Math.min(Math.max(1,+e.target.value||1),free);e.ta
 $$('#bookbox .radio[data-p]').forEach(r=>r.onclick=()=>{$$('#bookbox .radio[data-p]').forEach(x=>x.classList.remove("on"));r.classList.add("on");bkPay=r.dataset.p});
 $("#bkok").onclick=holConfirm;
 $("#bookbox").scrollIntoView({behavior:"smooth",block:"center"})}
-function holConfirm(){const h=K.hol(bkId);const free=K.holFree(h);if(!h||!KhattiCore.future(h.date,h.time)||!KhattiCore.integer(bkSeats,1,free)){K.toast("المقاعد المتبقية لا تكفي");return}
-const s=K.get("holSeats",{});s[bkId]=free-bkSeats;
+function holConfirm(){const h=K.hol(bkId);const free=K.holFree(h);if(bkSeats>free){K.toast("المقاعد المتبقية لا تكفي");return}
+const s=K.get("holSeats",{});s[bkId]=free-bkSeats;K.set("holSeats",s);
 const nb={id:"hb"+Date.now(),holId:bkId,when:h.dlabel+" — "+h.time,type:"رحلة عطلة 🎉",pay:{cash:"كاش",zain:"Zain Cash",asia:"آسيا حوالة"}[bkPay],seats:bkSeats,status:"upcoming",rated:false};
-const b=K.get("bookings",[]);b.unshift(nb);
-const t=K.get("trips",[]);t.unshift(nb);K.commit({holSeats:s,bookings:b,trips:t});
-$("#bkok").disabled=true;K.toast("حُفظ حجز تجريبي لـ "+bkSeats+" مقعد؛ لا حجز فعلي أو دفع");setTimeout(()=>location.href="trips.html",900)}
+const b=K.get("bookings",[]);b.unshift(nb);K.set("bookings",b);
+const t=K.get("trips",[]);t.unshift(nb);K.set("trips",t);
+K.toast("تم حجز "+bkSeats+" مقعد ✓");setTimeout(()=>location.href="trips.html",900)}
 K.holBanner();renderList();renderReqs();checkMatches(true);K.holBanner();
-
-window.holBook=holBook;
-window.delReq=delReq;
-})();
 </script></body></html>

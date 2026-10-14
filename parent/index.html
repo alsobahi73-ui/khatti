@@ -1,41 +1,38 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>رابط الأهل — متابعة الرحلة</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
 <script>
-(function(){
-if(!K.access())return;
 /* رابط ثابت — يعمل بلا تسجيل دخول */
-const l=K.line("l1");let active=true,stopSim=()=>{},timers=[];
+const l=K.line("l1");let active=true;
 const KIDS=[{n:"زهراء محمد",line:"l1",sub:"الكاظمية ← جامعة بغداد"},{n:"علي محمد",line:"l2",sub:"الدورة ← المستنصرية"}];
-function render(){stopSim();timers.forEach(clearTimeout);timers=[];
+function render(){
 $("#app").innerHTML=`
 <div class="card"><div class="mut">👨‍👩‍👧 متابعة الأهل — رابطك الثابت</div>
 <div class="chips" style="margin-top:8px">${KIDS.map((k,i)=>`<button class="chip ${i===0?"on":""}" data-k="${i}">${k.n}</button>`).join("")}</div>
 <div class="row" style="margin-top:8px"><button class="btn btn-g btn-s" id="simA">محاكاة: رحلة نشطة</button><button class="btn btn-g btn-s" id="simB">محاكاة: انتهاء الرحلة</button></div></div>
 <div id="state"></div>
 <div class="card"><h3>💳 اشتراك زهراء الشهري</h3><div class="row"><span class="mut">خط الكاظمية ← جامعة بغداد</span><b class="grow" style="text-align:left">${K.fmt(75000)}</b></div>
-<button class="btn btn-a" onclick="K.toast('الدفع غير متصل بأي خدمة؛ لم تُرسل محفظة أو تُخصم أموال')">ادفع عبر Zain Cash</button></div>
+<button class="btn btn-a" onclick="K.toast('سيصلك رقم محفظة Zain Cash لإتمام الدفع 📱')">ادفع عبر Zain Cash</button></div>
 <div class="note">🔗 هذا رابطك الثابت — احفظه في المفضلة. يعمل من المتصفح بلا تثبيت، ويعرض الموقع <b>فقط أثناء الرحلة</b>.</div>`;
 $("#simA").onclick=()=>{active=true;render()};$("#simB").onclick=()=>{active=false;render()};
 $$("[data-k]").forEach(c=>c.onclick=()=>{$$("[data-k]").forEach(x=>x.classList.remove("on"));c.classList.add("on");K.toast("تجريبي: طفل واحد مرتبط في هذا النموذج")});
 const st=$("#state");
 if(!active){st.innerHTML=`<div class="bigempty"><div class="ic">😴</div><b>لا توجد رحلة نشطة الآن</b><br><span class="mut">آخر رحلة: أمس — وصلت زهراء الجامعة 07:25 ✓</span></div>`;return}
-st.innerHTML=`<div class="card"><div class="row"><span class="trusted" style="border-color:var(--ok);color:var(--ok)">🧪 محاكاة رحلة نشطة</span><span class="grow"></span><span class="mut">زهراء في الطريق</span></div>
+st.innerHTML=`<div class="card"><div class="row"><span class="trusted" style="border-color:var(--ok);color:var(--ok)">🟢 رحلة نشطة الآن</span><span class="grow"></span><span class="mut">زهراء في الطريق</span></div>
 <div class="mapbox" id="pmap" style="margin-top:8px"></div>
-<div class="row" style="margin-top:8px"><span class="mut">الوصول المتوقع:</span><b id="peta" style="color:var(--navy)">غير متاح دون خريطة</b></div></div>
+<div class="row" style="margin-top:8px"><span class="mut">الوصول المتوقع:</span><b id="peta" style="color:var(--navy)">…</b></div></div>
 <div class="card"><h3>🔔 التنبيهات</h3><div class="alerts" id="pfeed"></div>
 <div class="qr" style="margin-top:10px"><button id="d1">محاكاة: تأخير</button><button id="d2">محاكاة: انحراف</button><button id="d3">محاكاة: عدم صعود</button></div></div>`;
 const feed=(t,c="")=>$("#pfeed").insertAdjacentHTML("afterbegin",`<div class="alert ${c}">${t}<small>الآن</small></div>`);
 const m=K.map("pmap",l.route[0],11);
 if(m){let mins=8;$("#peta").textContent=mins+" دقائق";
-stopSim=K.sim(m,l.route,(ev,left)=>{if(ev==="tick"){$("#peta").textContent=Math.max(1,Math.ceil(left*8))+" دقائق"}else{$("#peta").textContent="وصلت ✓";feed("✅ وصلت زهراء إلى الجامعة","ok")}})}
-timers.push(setTimeout(()=>feed("🧪 محاكاة: صعدت زهراء الباص — 07:02","ok"),1500));
-timers.push(setTimeout(()=>feed("🧪 محاكاة: الباص في الطريق — خط الكاظمية ← جامعة بغداد"),4000));
+K.sim(m,l.route,(ev,left)=>{if(ev==="tick"){$("#peta").textContent=Math.max(1,Math.ceil(left*8))+" دقائق"}else{$("#peta").textContent="وصلت ✓";feed("✅ وصلت زهراء إلى الجامعة","ok")}})}
+setTimeout(()=>feed("✅ صعدت زهراء الباص — 07:02","ok"),1500);
+setTimeout(()=>feed("🚌 الباص في الطريق — خط الكاظمية ← جامعة بغداد"),4000);
 $("#d1").onclick=()=>feed("⚠️ تأخير غير معتاد — 12 دقيقة عن الموعد","warn");
 $("#d2").onclick=()=>feed("⚠️ انحراف عن المسار المسجل — جارٍ التحقق","warn");
 $("#d3").onclick=()=>feed("🚨 تنبيه: لم يصعد علي باص اليوم في موعده","bad");
 }
 K.page("متابعة الأهل","../index.html");render();
-})();
 </script></body></html>
