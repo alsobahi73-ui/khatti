@@ -9,7 +9,7 @@ let leafletCss=fs.readFileSync(path.join(leafletRoot,'dist/leaflet.css'),'utf8')
 const leafletLicense=fs.readFileSync(path.join(leafletRoot,'LICENSE'),'utf8').replace(/&/g,'&amp;').replace(/</g,'&lt;');
 const leafletJs=fs.readFileSync(path.join(leafletRoot,'dist/leaflet.js'),'utf8');
 const icons={iconUrl:dataFile(path.join(leafletRoot,'dist/images/marker-icon.png')),iconRetinaUrl:dataFile(path.join(leafletRoot,'dist/images/marker-icon-2x.png')),shadowUrl:dataFile(path.join(leafletRoot,'dist/images/marker-shadow.png'))};
-const routeCode=source=>source.replace(/\blocation\./g,'__khattiLocation.').replace(/\bhistory\.replaceState\b/g,'__khattiHistory.replaceState');
+const routeCode=source=>source.replace(/\blocation\.(href|pathname|search|replace|reload)\b/g,(_,property)=>'__khattiLocation.'+property).replace(/\bhistory\.replaceState\b/g,'__khattiHistory.replaceState');
 function script(source){return '<script>'+source.replace(/<\/script/gi,'<\\/script')+'<\/script>'}
 const documents={};
 for(const name of pages){
