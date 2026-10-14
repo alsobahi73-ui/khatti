@@ -2,8 +2,8 @@
 <body><div class="wrap"><main id="app">
 <div class="tabs"><span class="tab on">🚌 خطوط دائمة</span><a class="tab" href="holiday.html" style="text-decoration:none;color:inherit">🎉 رحلات العطل</a></div>
 <div class="card"><h3>🔍 ابحث عن خط</h3>
-<div class="field"><label>المحافظة</label><select id="gov"><option>بغداد</option><option>البصرة</option><option>الموصل</option><option>أربيل</option><option>النجف</option></select></div>
-<div class="field"><label>المنطقة</label><select id="area"><option value="">كل المناطق</option></select></div>
+<div class="field"><label for="gov">المحافظة</label><select id="gov" aria-controls="area"></select></div>
+<div class="field"><label for="area">المدينة / المنطقة</label><select id="area" aria-describedby="city-hint"><option value="">كل المدن والمناطق</option></select><div class="mut" id="city-hint" role="status" aria-live="polite"></div></div>
 <div class="field"><label>الجهة (جامعة / دائرة)</label><select id="uni"><option value="">كل الجهات</option></select></div>
 <div class="chips" id="fcomp">
 <button class="chip on" data-c="">الكل</button><button class="chip" data-c="girls">بنات فقط</button><button class="chip" data-c="boys">شباب فقط</button><button class="chip" data-c="mixed">مختلط</button>
@@ -16,21 +16,38 @@
 <div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">جرّب توسيع المنطقة أو إزالة فلتر السعر. يمكنك حفظ طلب تجريبي محلي؛ لا إشعارات فعلية في هذا العرض.</p><button class="btn btn-a" id="notifybtn">🔔 أعلمني عند التوفر</button></div>
 </main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/runtime.js"></script><script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script><script src="../assets/journey.js"></script>
+<script src="../assets/runtime.js"></script><script src="../assets/data.js"></script><script src="../assets/locations.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script><script src="../assets/journey.js"></script>
 <script>
 (function(){
 if(!K.access())return;
 K.page("بحث عن خط","../index.html");
 const area=$("#area"),uni=$("#uni");
-AREAS.forEach(a=>area.insertAdjacentHTML("beforeend",`<option>${a}</option>`));
-UNIS.forEach(u=>uni.insertAdjacentHTML("beforeend",`<option>${u}</option>`));
+const governorate=document.getElementById('gov');
+KhattiLocations.forEach(g=>governorate.add(new Option(g.name,g.name)));
+const selectedLocation=()=>KhattiLocations.find(g=>g.name===governorate.value)||KhattiLocations[0];
+function updateCities(selected=''){
+ const location=selectedLocation();area.replaceChildren(new Option('كل المدن والمناطق',''));
+ location.cities.forEach(city=>area.add(new Option(city,city)));
+ area.value=location.cities.includes(selected)?selected:'';
+ uni.replaceChildren(new Option(location.name==='بغداد'?'كل الجهات':'لا توجد جهات في بيانات العرض بعد',''));uni.disabled=location.name!=='بغداد';if(!uni.disabled)UNIS.forEach(name=>uni.add(new Option(name,name)));
+ document.getElementById('city-hint').textContent='مدن ومناطق رئيسية في '+location.name+' — '+location.cities.length+' خيارات';
+}
+function resetPin(){pin=null;if(pinMk){pinMk.remove();pinMk=null}if(pmap)pmap.setView(selectedLocation().center,11)}
+updateCities();
 let fc="",pin=null,pmap=null,pinMk=null;
-try{const saved=JSON.parse(sessionStorage.getItem('khatti_search_filters')||'{}');for(const id of ['gov','area','uni','max-price','min-rating']){const select=document.getElementById(id);if([...select.options].some(o=>o.value===saved[id]))select.value=saved[id]}if(['','girls','boys','mixed'].includes(saved.comp))fc=saved.comp}catch{}
+try{const saved=JSON.parse(sessionStorage.getItem('khatti_search_filters')||'{}');
+ const name=saved.gov==='الموصل'?'نينوى':saved.gov;
+ if(KhattiLocations.some(g=>g.name===name))governorate.value=name;
+ updateCities(saved.area);
+ for(const id of ['uni','max-price','min-rating']){const select=document.getElementById(id);if([...select.options].some(o=>o.value===saved[id]))select.value=saved[id]}
+ if(['','girls','boys','mixed'].includes(saved.comp))fc=saved.comp
+}catch{updateCities()}
+
 $$('#fcomp .chip').forEach(b=>b.classList.toggle('on',b.dataset.c===fc));
 for(const id of ['area','uni','max-price','min-rating'])document.getElementById(id).onchange=doSearch;
-$('#reset-search').onclick=()=>{$('#gov').value='بغداد';for(const id of ['area','uni','max-price','min-rating'])document.getElementById(id).value='';fc='';pin=null;if(pinMk){pinMk.remove();pinMk=null}$$('#fcomp .chip').forEach(b=>b.classList.toggle('on',b.dataset.c===''));doSearch()};
+$('#reset-search').onclick=()=>{$('#gov').value='بغداد';updateCities();for(const id of ['area','uni','max-price','min-rating'])document.getElementById(id).value='';fc='';resetPin();$$('#fcomp .chip').forEach(b=>b.classList.toggle('on',b.dataset.c===''));doSearch()};
 $("#fcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#fcomp .chip").forEach(c=>c.classList.remove("on"));b.classList.add("on");fc=b.dataset.c;doSearch()});
-$("#go").onclick=doSearch;$("#gov").onchange=doSearch;
+$("#go").onclick=doSearch;governorate.onchange=()=>{updateCities();uni.value='';resetPin();doSearch()};
 function doSearch(){
  const saved={comp:fc};for(const id of ['gov','area','uni','max-price','min-rating'])saved[id]=document.getElementById(id).value;try{sessionStorage.setItem('khatti_search_filters',JSON.stringify(saved))}catch{}
  const g=$("#gov").value;const box=$("#results"),nt=$("#notify");box.innerHTML="";
@@ -49,7 +66,7 @@ function doSearch(){
  box.innerHTML=distanceNote+ls.map(l=>K.lineCard(l)).join("");
 }
 $("#pinmode").onclick=()=>{const b=$("#pinbox");b.style.display=b.style.display==="none"?"block":"none";
- if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",[33.315,44.38],11);
+ if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",selectedLocation().center,11);
   if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}
  if(pmap&&b.style.display==="block")setTimeout(()=>pmap.invalidateSize(),0)};
 $("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:$("#gov").value,area:area.value,uni:uni.value,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("حُفظ طلب تجريبي محليًا؛ لا تُرسل إشعارات فعلية")};
