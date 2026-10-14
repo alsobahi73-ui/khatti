@@ -21,7 +21,7 @@ export async function createApp(o: Options) {
  const now = () => (o.clock || Date.now)();
  const iso = (time: number) => new Date(time).toISOString();
  await app.register(cookie);
- await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
+ await app.register(rateLimit, { max: 100, timeWindow: '1 minute', allowList: req=>!req.url.startsWith('/v1/') });
  app.addHook('onRequest', async (req, reply) => {
   reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer');
   if (req.url.startsWith('/v1/')) {
@@ -115,11 +115,23 @@ export async function createApp(o: Options) {
   const s=await auth(req), id=(req.params as any).id;const row=(await o.store.query('SELECT object_key FROM driver_documents WHERE id=$1 AND user_id=$2',[id,s.userId])).rows[0];if(!row)fail(404,'NOT_FOUND','الوثيقة غير متاحة');
   return reply.type('image/jpeg').header('Content-Disposition','attachment; filename="license.jpg"').send(await readFile(path.join(o.privateDir,row.object_key)));
  });
+ async function draftDriver(req: FastifyRequest,write=false) {
+  const session=write?await mutate(req):await auth(req);
+  if(!(await o.store.query("SELECT 1 FROM user_roles WHERE user_id=$1 AND role='driver'",[session.userId])).rows.length)fail(403,'DRIVER_REQUIRED','الحساب ليس حساب سائق');
+  return session;
+ }
+ app.get('/v1/driver/draft',async req=>{const s=await draftDriver(req);return {draft:(await o.store.query('SELECT vehicle_type AS "vehicleType",plate,vehicle_year AS year,seats FROM driver_drafts WHERE user_id=$1',[s.userId])).rows[0]||null}});
+ app.put('/v1/driver/draft',{schema:{body:object({vehicleType:{enum:['كوستر','هايس','باص صغير','سيدان']},plate:{type:'string',maxLength:30},year:{type:'string',maxLength:4,pattern:'^[0-9]*$'},seats:{type:'string',maxLength:2,pattern:'^[0-9]*$'}},['vehicleType','plate','year','seats'])}},async req=>{
+  const s=await draftDriver(req,true),b=req.body as any;
+  await o.store.query('INSERT INTO driver_drafts(user_id,vehicle_type,plate,vehicle_year,seats) VALUES($1,$2,$3,$4,$5) ON CONFLICT(user_id) DO UPDATE SET vehicle_type=$2,plate=$3,vehicle_year=$4,seats=$5,updated_at=now()',[s.userId,b.vehicleType,b.plate,b.year,b.seats]);
+  return {saved:true};
+ });
  app.post('/v1/driver/submissions',{schema:{body:object({vehicleType:{enum:['كوستر','هايس','باص صغير','سيدان']},plate:str(1,30),year:{type:'integer',minimum:1990,maximum:new Date().getFullYear()},seats:{type:'integer',minimum:4,maximum:60},documentId:{type:'string',format:'uuid'}},['vehicleType','plate','year','seats','documentId'])}},async req=>{
   const s=await mutate(req),b=req.body as any;if(!b.plate.trim())fail(400,'INVALID_INPUT','أدخل رقم اللوحة');
   await o.store.transaction(async db=>{
    const doc=(await db.query("SELECT d.id FROM driver_documents d JOIN user_roles r ON r.user_id=d.user_id AND r.role='driver' WHERE d.id=$1 AND d.user_id=$2",[b.documentId,s.userId])).rows[0];if(!doc)fail(404,'NOT_FOUND','الوثيقة غير متاحة');
    await db.query("INSERT INTO driver_profiles(user_id,vehicle_type,plate,vehicle_year,seats,document_id,review_status) VALUES($1,$2,$3,$4,$5,$6,'pending_review') ON CONFLICT(user_id) DO UPDATE SET vehicle_type=$2,plate=$3,vehicle_year=$4,seats=$5,document_id=$6,review_status='pending_review',review_reason=NULL,reviewed_by=NULL,reviewed_at=NULL,submitted_at=now()",[s.userId,b.vehicleType,b.plate.trim(),b.year,b.seats,b.documentId]);
+   await db.query('DELETE FROM driver_drafts WHERE user_id=$1',[s.userId]);
   });return {user:await view(o.store,s.userId)};
  });
  app.get('/v1/internal/driver-reviews',async req=>{await reviewer(req);return {requests:(await o.store.query("SELECT p.user_id,u.full_name,p.vehicle_type,p.plate,p.review_status,p.document_id FROM driver_profiles p JOIN users u ON u.id=p.user_id WHERE p.review_status='pending_review' ORDER BY p.submitted_at LIMIT 100")).rows}});

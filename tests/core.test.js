@@ -22,3 +22,5 @@ test('report eligibility matches completed trip and selected service',()=>{
  assert.ok(C.canRate(trips[0]));assert.ok(!C.canRate({...trips[0],rated:true}));assert.ok(!C.canRate(trips[3]));
 });
 test('HTML escaping covers quoted attributes as well as elements',()=>assert.equal(C.esc('"\'><img>&'),'&quot;&#39;&gt;&lt;img&gt;&amp;'));
+
+test('Iraqi phone entry accepts Arabic digits, spacing and international prefix',()=>{assert.equal(C.localPhone('٠٧٧٠ ٠٠٠ ٠٠٠٠'),'07700000000');assert.equal(C.localPhone('+964 770 000 0000'),'07700000000');assert.equal(C.localPhone('07100000000'),null)});

@@ -1,38 +1,32 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تأكيد الحجز</title><link rel="stylesheet" href="../assets/style.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/runtime.js"></script><script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/runtime.js"></script><script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script><script src="../assets/journey.js"></script>
 <script>
 (function(){
 if(!K.access())return;
-K.page("تأكيد الحجز","search.html");
-const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
-if(!l){K.missing();return}
-let type="month",pay="cash";
-const app=$("#app");
-function price(){return type==="month"?l.price:l.day}
-app.innerHTML=`
-<div class="card"><div class="row">${K.badge(l.comp)}</div>
-<div class="route" style="font-size:18px;font-weight:800;margin:6px 0">${K.esc(l.from)} ← ${K.esc(l.to)}</div>
-<div class="mut">${K.esc(l.driver)} • ذهاب ${K.esc(l.go)} / إياب ${K.esc(l.back)}</div></div>
-<div class="card"><h3>نوع الحجز</h3>
-<label class="radio" data-t="day"><input type="radio" name="t"> مقعد يومي — ${K.fmt(l.day)}</label>
-<label class="radio on" data-t="month"><input type="radio" name="t" checked> اشتراك شهري — ${K.fmt(l.price)}</label>
-<div class="field" style="margin-top:10px"><label>الاسم</label><input id="nm" value="${K.esc(K.pname())}"></div>
-<div class="field"><label>رقم الهاتف</label><input id="ph" placeholder="07xxxxxxxxx — استخدم رقمًا تجريبيًا" dir="ltr" style="text-align:right"></div></div>
-<div class="card"><h3>طريقة الدفع</h3>
-<label class="radio on" data-p="cash"><input type="radio" name="p" checked> 💵 كاش — أدفع للسائق مباشرة</label>
-<label class="radio" data-p="zain"><input type="radio" name="p"> 📱 Zain Cash — محاكاة دفع فقط — لا تحويل أموال</label>
-<label class="radio" data-p="asia"><input type="radio" name="p"> 🏦 آسيا حوالة — محاكاة دفع فقط — لا تحويل أموال</label>
-<div class="note" style="margin-top:10px">يستطيع الأهل دفع اشتراك الأبناء من حساباتهم مباشرة.</div></div>
-<div class="card"><div class="row"><span class="mut">الإجمالي</span><b class="grow" style="text-align:left;font-size:20px;color:var(--navy)" id="tot">${K.fmt(price())}</b></div>
-<button class="btn btn-a" id="ok">تأكيد الحجز ✓</button></div>`;
-$$(".radio[data-t]").forEach(r=>r.onclick=()=>{$$(".radio[data-t]").forEach(x=>x.classList.remove("on"));r.classList.add("on");type=r.dataset.t;$("#tot").textContent=K.fmt(price())});
-$$(".radio[data-p]").forEach(r=>r.onclick=()=>{$$(".radio[data-p]").forEach(x=>x.classList.remove("on"));r.classList.add("on");pay=r.dataset.p});
-$("#ok").onclick=()=>{if(!KhattiCore.name($("#nm").value)||!KhattiCore.phone($("#ph").value)){K.toast("أدخل اسمًا ورقمًا عراقيًا صحيحين للعرض التجريبي");return}
-if(K.line(id).free<1){K.toast("لا توجد مقاعد متاحة");return}
-const b=K.get("bookings",[]);const nb={id:"b"+Date.now(),lineId:id,when:"اليوم — "+l.go,type:type==="month"?"اشتراك شهري":"مقعد يومي",pay:{cash:"كاش",zain:"Zain Cash",asia:"آسيا حوالة"}[pay],status:"upcoming"};
-b.unshift(nb);
-const trips=K.get("trips",[]);trips.unshift({id:nb.id,lineId:id,when:"اليوم — "+l.go,status:"upcoming",rated:false});K.commit({bookings:b,trips});
-$("#ok").disabled=true;K.toast("حُفظ حجز تجريبي محليًا؛ لا حجز فعلي ولا دفع");setTimeout(()=>location.href="trips.html",900)};
+K.page("مراجعة الحجز التجريبي","search.html");
+const id=new URLSearchParams(location.search).get("id")||"l1";
+if(!K.line(id)){K.missing();return}
+const app=document.getElementById('app');
+let type='month',pay='cash',name=K.pname(),phone=KhattiCore.localPhone(K.get('me',null)?.phone||'')||'',pickup=K.line(id).pickups[0],confirmedId=null,busy=false;
+const pays={cash:'كاش — محاكاة، لا تحصيل',zain:'Zain Cash — غير مربوط، لا تحويل',asia:'آسيا حوالة — غير مربوط، لا تحويل'};
+function details(){const l=K.line(id);app.innerHTML=Journey.steps(['تفاصيل المقعد','المراجعة والتأكيد'],0)+`
+<div class="card"><h3>${K.esc(l.from)} ← ${K.esc(l.to)}</h3><div class="mut">${K.esc(l.driver)} • الذهاب ${K.esc(l.go)} / الإياب ${K.esc(l.back)}</div><div class="note" style="margin-top:8px">حجز تجريبي على هذا المتصفح فقط. لا إرسال للسائق ولا حجز مقعد فعلي أو دفع.</div></div>
+<div class="card"><h3>اختر المقعد ونقطة الالتقاط</h3><label class="radio ${type==='day'?'on':''}" data-t="day"><input type="radio" name="t" ${type==='day'?'checked':''}> مقعد يومي — ${K.fmt(l.day)}</label><label class="radio ${type==='month'?'on':''}" data-t="month"><input type="radio" name="t" ${type==='month'?'checked':''}> اشتراك شهري — ${K.fmt(l.price)}</label>
+<div class="field"><label for="pickup">نقطة الالتقاط التجريبية</label><select id="pickup">${l.pickups.map(p=>`<option value="${K.esc(p)}">${K.esc(p)}</option>`).join('')}</select></div><div class="field"><label for="nm">الاسم</label><input id="nm" maxlength="100" value="${K.esc(name)}"></div><div class="field"><label for="ph">رقم هاتف تجريبي</label><input id="ph" inputmode="tel" dir="ltr" value="${K.esc(phone)}" placeholder="07xxxxxxxxx"></div></div>
+<div class="card"><h3>طريقة الدفع — عرض فقط</h3>${Object.entries(pays).map(([key,label])=>`<label class="radio ${pay===key?'on':''}" data-p="${key}"><input type="radio" name="p" ${pay===key?'checked':''}> ${label}</label>`).join('')}<div class="row"><span class="mut">الإجمالي المعروض</span><b id="tot">${K.fmt(type==='month'?l.price:l.day)}</b></div><button class="btn btn-a" id="ok">مراجعة التفاصيل قبل التأكيد</button></div>`;
+ document.getElementById('pickup').value=pickup;
+ document.querySelectorAll('[data-t]').forEach(r=>r.onclick=()=>{type=r.dataset.t;document.querySelectorAll('[data-t]').forEach(x=>{x.classList.toggle('on',x===r);x.querySelector('input').checked=x===r});document.getElementById('tot').textContent=K.fmt(type==='month'?l.price:l.day)});
+ document.querySelectorAll('[data-p]').forEach(r=>r.onclick=()=>{pay=r.dataset.p;document.querySelectorAll('[data-p]').forEach(x=>{x.classList.toggle('on',x===r);x.querySelector('input').checked=x===r})});
+ document.getElementById('ok').onclick=()=>{Journey.clear();name=document.getElementById('nm').value;phone=document.getElementById('ph').value;pickup=document.getElementById('pickup').value;if(!KhattiCore.name(name)||!KhattiCore.phone(phone)){Journey.error('أدخل اسمًا ورقمًا عراقيًا صحيحين للعرض التجريبي',!KhattiCore.name(name)?'nm':'ph');return}phone=KhattiCore.localPhone(phone);if(K.line(id).free<1){Journey.error('لا توجد مقاعد متاحة');return}review()};
+}
+function review(){const l=K.line(id);app.innerHTML=Journey.steps(['تفاصيل المقعد','المراجعة والتأكيد'],1)+`<div class="card"><h3>راجع قبل حفظ الحجز التجريبي</h3><dl class="journey-summary"><dt>الخط</dt><dd>${K.esc(l.from)} ← ${K.esc(l.to)}</dd><dt>الالتقاط</dt><dd>${K.esc(pickup)}</dd><dt>المواعيد</dt><dd>ذهاب ${K.esc(l.go)} / إياب ${K.esc(l.back)}</dd><dt>النوع</dt><dd>${type==='month'?'اشتراك شهري تجريبي':'مقعد يومي تجريبي'}</dd><dt>الاسم</dt><dd>${K.esc(name)}</dd><dt>الهاتف التجريبي</dt><dd dir="ltr">${K.esc(phone)}</dd><dt>الإجمالي المعروض</dt><dd>${K.fmt(type==='month'?l.price:l.day)}</dd><dt>طريقة الدفع</dt><dd>${pays[pay]}</dd></dl><p class="note" style="margin-top:10px">الخطوة التالية تحفظ سجل عرض على جهازك فقط؛ لا تصل بياناتك للسائق ولا تُحجز سعة فعلية ولا تُخصم أموال.</p><button class="btn btn-a" id="confirm-booking">حفظ الحجز التجريبي فقط</button><button class="btn btn-g" id="edit-booking">تعديل التفاصيل</button></div>`;document.getElementById('edit-booking').onclick=details;document.getElementById('confirm-booking').onclick=confirm;Journey.focus()}
+function confirm(){if(busy||confirmedId)return;busy=true;const button=document.getElementById('confirm-booking');button.disabled=true;Journey.clear();try{
+ const l=K.line(id);if(l.free<1){Journey.error('نفدت المقاعد التجريبية؛ اختر خطًا آخر');return}
+ const bookings=K.get('bookings',[]),trips=K.get('trips',[]);const booking={id:'b'+crypto.randomUUID(),lineId:id,when:'اليوم — '+l.go,type:type==='month'?'اشتراك شهري':'مقعد يومي',pay:pays[pay],status:'upcoming',rated:false,pickup,price:type==='month'?l.price:l.day,demo:true};
+ K.commit({bookings:[booking,...bookings],trips:[booking,...trips]});confirmedId=booking.id;
+ app.innerHTML=`<div class="card"><h3>حُفظ الحجز التجريبي محليًا</h3><p>لا حجز فعلي ولا دفع، ولم يُرسل طلب للسائق.</p><div class="alert" style="margin-top:10px">${K.esc(l.from)} ← ${K.esc(l.to)}<br>الالتقاط: ${K.esc(pickup)}<br>الذهاب ${K.esc(l.go)} / الإياب ${K.esc(l.back)}</div><div class="note" style="margin-top:10px">الخطوة التالية: يمكنك مراجعة السجل في «رحلاتي» أو تجربة خط آخر. موعد «اليوم» معروض للمحاكاة فقط.</div><a class="btn btn-p" href="trips.html">عرض رحلاتي التجريبية</a><a class="btn btn-g" href="search.html">البحث عن خط آخر</a></div>`;K.toast('حُفظ حجز تجريبي محليًا؛ لا حجز فعلي ولا دفع');Journey.focus();
+ }catch(error){Journey.error('لم تكتمل العملية. تعذّر الحفظ المحلي؛ راجع إعدادات التخزين ثم أعد المحاولة')}finally{busy=false;if(button.isConnected)button.disabled=false}}
+details();
 })();
 </script></body></html>

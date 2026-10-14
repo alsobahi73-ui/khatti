@@ -30,8 +30,18 @@ test('server account survives reload and local storage clearing; logout retains 
 test('driver image is uploaded privately and acceptance cannot be simulated from UI',async({page})=>{
  await register(page,'07700000102','driver');await page.locator('#account-plate').fill('اختبار 123');
  const sharp=require('sharp');const image=await sharp({create:{width:4,height:4,channels:3,background:'white'}}).png().toBuffer();
- await page.locator('#account-license').setInputFiles({name:'test.png',mimeType:'image/png',buffer:image});await page.locator('#account-submit-driver').click();await expect(page.locator('#account-review-status')).toContainText('قيد المراجعة');
+ await page.locator('#driver-next').click();await page.locator('#account-license').setInputFiles({name:'test.png',mimeType:'image/png',buffer:image});await page.locator('#account-submit-driver').click();await expect(page.locator('#account-review-status')).toContainText('قيد المراجعة');
  await page.reload();await expect(page.locator('#account-review-status')).toContainText('قيد المراجعة');await expect(page.locator('#simok')).toHaveCount(0);
  await page.goto('/driver/index.html');await expect(page.locator('#app')).toContainText('غير مرتبطة بالخادم');
  const privateFile=await page.request.get('/.local-auth/auth-key');expect([403,404]).toContain(privateFile.status());
+});
+test('driver draft survives reload and saves again after connectivity returns',async({page,context})=>{
+ await register(page,'07700000103','driver');await page.locator('#account-plate').fill('مسودة خادمية');await page.locator('#account-year').fill('2021');await page.locator('#driver-save-later').click();await expect(page.locator('#driver-draft-status')).toContainText('حُفظت');
+ await page.reload();await expect(page.locator('#account-plate')).toHaveValue('مسودة خادمية');await expect(page.locator('#account-year')).toHaveValue('2021');
+ await context.setOffline(true);await page.locator('#account-plate').fill('تعديل دون اتصال');await page.locator('#driver-next').click();await expect(page.locator('#connection-status')).toBeVisible();await expect(page.locator('#journey-error')).toContainText('الاتصال');await expect(page.locator('#account-plate')).toHaveValue('تعديل دون اتصال');
+ await context.setOffline(false);await expect(page.locator('#driver-draft-status')).toContainText('حُفظت مسودة');await page.reload();await expect(page.locator('#account-plate')).toHaveValue('تعديل دون اتصال');
+});
+test('failed OTP request preserves identity inputs and reports inline error',async({page})=>{
+ await page.goto('/register.html');await page.locator('#account-name').fill('بيانات محفوظة بالواجهة');await page.locator('#account-phone').fill('07700000104');await page.locator('#account-consent').check();
+ await page.route('**/v1/auth/otp/request',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'تعذّر إرسال الرمز الآن'}})}));await page.locator('#account-request').click();await expect(page.locator('#journey-error')).toContainText('تعذّر إرسال');await expect(page.locator('#account-name')).toHaveValue('بيانات محفوظة بالواجهة');await expect(page.locator('#account-phone')).toHaveValue('07700000104');
 });

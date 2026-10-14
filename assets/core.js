@@ -3,7 +3,8 @@
 const Core={
 esc(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))},
 integer(v,min,max){return String(v).trim()!==""&&Number.isInteger(Number(v))&&Number(v)>=min&&Number(v)<=max},
-phone(v){return /^07\d{9}$/.test(String(v).replace(/\s/g,""))},
+localPhone(v){const digits=String(v).replace(/[٠-٩۰-۹]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.includes(c)?'٠١٢٣٤٥٦٧٨٩'.indexOf(c):'۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/[\s()-]/g,'');const local=digits.startsWith('+964')?'0'+digits.slice(4):digits;return /^07[3-9]\d{8}$/.test(local)?local:null},
+phone(v){return this.localPhone(v)!==null},
 name(v){return typeof v==="string"&&v.trim().length>=2&&v.trim().length<=100},
 time(v){return /^([01]\d|2[0-3]):[0-5]\d$/.test(v)},
 point(p){return Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&Math.abs(p[0])<=90&&Math.abs(p[1])<=180},

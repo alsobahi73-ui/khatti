@@ -8,15 +8,15 @@
 <div class="chips" id="fcomp">
 <button class="chip on" data-c="">الكل</button><button class="chip" data-c="girls">بنات فقط</button><button class="chip" data-c="boys">شباب فقط</button><button class="chip" data-c="mixed">مختلط</button>
 </div>
-<button class="btn btn-p" id="go">ابحث</button>
+<div class="row"><div class="field grow"><label for="max-price">الحد الأعلى شهريًا</label><select id="max-price"><option value="">أي سعر</option><option value="60000">60,000 د.ع</option><option value="70000">70,000 د.ع</option><option value="80000">80,000 د.ع</option></select></div><div class="field grow"><label for="min-rating">أقل تقييم</label><select id="min-rating"><option value="">أي تقييم</option><option value="4">4 نجوم</option><option value="4.5">4.5 نجمة</option></select></div></div><button class="btn btn-p" id="go">ابحث</button>
 <button class="btn btn-g" id="pinmode">📍 بحث بالدبوس — ضع دبوس بيتك على الخريطة</button>
-</div>
+<button class="btn btn-g" id="reset-search">مسح الفلاتر والدبوس</button></div>
 <div class="card" id="pinbox" style="display:none"><h3>ضع دبوس بيتك</h3><div class="mapbox" id="pmap"></div><div class="mut" style="margin-top:6px">اضغط على الخريطة لتحديد موقعك — ستُرتّب الخطوط حسب القرب منك.</div></div>
-<div id="results"></div>
-<div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">احفظ طلبك وسنُشعرك فور توفر خط يطابقك — صلاحية الطلب 30 يومًا.</p><button class="btn btn-a" id="notifybtn">🔔 أعلمني عند التوفر</button></div>
+<div id="result-count" role="status" aria-live="polite" class="mut" style="margin-bottom:10px"></div><div id="results"></div>
+<div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">جرّب توسيع المنطقة أو إزالة فلتر السعر. يمكنك حفظ طلب تجريبي محلي؛ لا إشعارات فعلية في هذا العرض.</p><button class="btn btn-a" id="notifybtn">🔔 أعلمني عند التوفر</button></div>
 </main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/runtime.js"></script><script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/runtime.js"></script><script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script><script src="../assets/journey.js"></script>
 <script>
 (function(){
 if(!K.access())return;
@@ -25,15 +25,23 @@ const area=$("#area"),uni=$("#uni");
 AREAS.forEach(a=>area.insertAdjacentHTML("beforeend",`<option>${a}</option>`));
 UNIS.forEach(u=>uni.insertAdjacentHTML("beforeend",`<option>${u}</option>`));
 let fc="",pin=null,pmap=null,pinMk=null;
+try{const saved=JSON.parse(sessionStorage.getItem('khatti_search_filters')||'{}');for(const id of ['gov','area','uni','max-price','min-rating']){const select=document.getElementById(id);if([...select.options].some(o=>o.value===saved[id]))select.value=saved[id]}if(['','girls','boys','mixed'].includes(saved.comp))fc=saved.comp}catch{}
+$$('#fcomp .chip').forEach(b=>b.classList.toggle('on',b.dataset.c===fc));
+for(const id of ['area','uni','max-price','min-rating'])document.getElementById(id).onchange=doSearch;
+$('#reset-search').onclick=()=>{$('#gov').value='بغداد';for(const id of ['area','uni','max-price','min-rating'])document.getElementById(id).value='';fc='';pin=null;if(pinMk){pinMk.remove();pinMk=null}$$('#fcomp .chip').forEach(b=>b.classList.toggle('on',b.dataset.c===''));doSearch()};
 $("#fcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#fcomp .chip").forEach(c=>c.classList.remove("on"));b.classList.add("on");fc=b.dataset.c;doSearch()});
 $("#go").onclick=doSearch;$("#gov").onchange=doSearch;
 function doSearch(){
+ const saved={comp:fc};for(const id of ['gov','area','uni','max-price','min-rating'])saved[id]=document.getElementById(id).value;try{sessionStorage.setItem('khatti_search_filters',JSON.stringify(saved))}catch{}
  const g=$("#gov").value;const box=$("#results"),nt=$("#notify");box.innerHTML="";
- if(g!=="بغداد"){nt.style.display="block";return}
+ if(g!=="بغداد"){nt.style.display="block";$("#result-count").textContent="العرض الحالي يحتوي خطوط بغداد فقط؛ لا خطوط تجريبية لهذه المحافظة";return}
  let ls=LINES.map(l=>K.line(l.id));
  if(area.value)ls=ls.filter(l=>l.from===area.value);
  if(uni.value)ls=ls.filter(l=>l.to===uni.value);
  if(fc)ls=ls.filter(l=>l.comp===fc);
+ if($("#max-price").value)ls=ls.filter(l=>l.price<=Number($("#max-price").value));
+ if($("#min-rating").value)ls=ls.filter(l=>l.rating>=Number($("#min-rating").value));
+ $("#result-count").textContent=ls.length+" خطوط تجريبية مطابقة — راجع نقطة الالتقاط والمواعيد قبل الاختيار";
  ls=KhattiCore.sortLines(ls,pin);
  const distanceNote=pin?'<div class="note">📍 مرتبة حسب القرب من بداية المسار التجريبي'+(ls[0]?` — أقرب خط على بعد ${ls[0]._d.toFixed(1)} كم`:"")+'</div>':"";
  if(!ls.length){nt.style.display="block";return}
@@ -42,7 +50,8 @@ function doSearch(){
 }
 $("#pinmode").onclick=()=>{const b=$("#pinbox");b.style.display=b.style.display==="none"?"block":"none";
  if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",[33.315,44.38],11);
-  if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}};
+  if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}
+ if(pmap&&b.style.display==="block")setTimeout(()=>pmap.invalidateSize(),0)};
 $("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:$("#gov").value,area:area.value,uni:uni.value,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("حُفظ طلب تجريبي محليًا؛ لا تُرسل إشعارات فعلية")};
 doSearch();
 })();

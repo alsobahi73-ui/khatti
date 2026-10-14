@@ -1,7 +1,7 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>بطاقة الخط</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/runtime.js"></script><script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/runtime.js"></script><script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script><script src="../assets/journey.js"></script>
 <script>
 (function(){
 if(!K.access())return;
@@ -18,11 +18,11 @@ app.innerHTML=`
 <div class="stat"><b>${K.fmt(l.price)}</b><span>اشتراك شهري</span></div>
 <div class="stat"><b>${l.free} / ${l.seats}</b><span>مقعدًا متاحًا</span></div>
 <div class="stat"><b>${K.esc(l.go)}</b><span>ذهاب • إياب ${K.esc(l.back)}</span></div></div>
-<h3 style="margin:10px 0 6px">📍 نقاط الالتقاط</h3>
+<div class="note" style="margin-top:10px">السائق والشارات والتقييمات بيانات عرض غير موثقة فعليًا. تأكد من نقطة الالتقاط والمواعيد والسعر قبل تجربة الحجز. لا يوجد حجز أو دفع فعلي.</div><h3 style="margin:10px 0 6px">📍 نقاط الالتقاط</h3>
 ${l.pickups.map(p=>`<div class="alert">${K.esc(p)}</div>`).join("")}
 <h3 style="margin:10px 0 6px">المسار</h3><div class="mapbox" id="rmap"></div>
 <div class="row" style="margin-top:10px">
-<a class="btn btn-p grow" href="booking.html?id=${l.id}">احجز مقعدًا</a>
+${l.free>0?`<a class="btn btn-p grow" href="booking.html?id=${l.id}">راجع حجز مقعد تجريبي</a>`:`<a class="btn btn-g grow" href="search.html">اكتملت المقاعد — ابحث عن خط آخر</a>`}
 <a class="btn btn-g grow" href="tracking.html?id=${l.id}">تتبع الرحلة</a></div>
 <div class="row"><a class="btn btn-g grow" href="chat.html?id=${l.id}">💬 دردشة مع السائق</a></div>
 </div>

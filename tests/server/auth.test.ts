@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
+import { PGlite } from '@electric-sql/pglite';
+import { randomUUID } from 'node:crypto';
 import { openStore } from '../../server/db.ts';
 import { createApp } from '../../server/app.ts';
 import { phone } from '../../server/security.ts';
@@ -59,7 +61,19 @@ test('persistent server registration and authorization',async t=>{
   assert.equal((await call('GET','/v1/driver/documents/'+documentId,undefined,passenger)).statusCode,404);
   assert.equal((await call('GET','/v1/driver/documents/'+documentId)).statusCode,401);
   const file=await call('GET','/v1/driver/documents/'+documentId,undefined,driver);assert.equal(file.statusCode,200);assert.equal((await sharp(file.rawPayload).metadata()).format,'jpeg');
-  const submission=await call('POST','/v1/driver/submissions',{vehicleType:'هايس',plate:'اختبار 1',year:2020,seats:14,documentId},driver);assert.equal(submission.statusCode,200,submission.body);assert.equal(submission.json().user.driver.review_status,'pending_review');
+  await call('PUT','/v1/driver/draft',{vehicleType:'هايس',plate:'مسودة سابقة',year:'2020',seats:'14'},driver);
+  const submission=await call('POST','/v1/driver/submissions',{vehicleType:'هايس',plate:'اختبار 1',year:2020,seats:14,documentId},driver);assert.equal(submission.statusCode,200,submission.body);assert.equal(submission.json().user.driver.review_status,'pending_review');assert.equal((await call('GET','/v1/driver/draft',undefined,driver)).json().draft,null);
+ });
+ await t.test('driver draft is private, validated and CSRF protected',async()=>{
+  assert.equal((await call('GET','/v1/driver/draft')).statusCode,401);
+  assert.equal((await call('GET','/v1/driver/draft',undefined,passenger)).statusCode,403);
+  const draft={vehicleType:'هايس',plate:'مسودة مركبة',year:'20',seats:''};
+  assert.equal((await call('PUT','/v1/driver/draft',draft,driver,{'x-csrf-token':'wrong'})).statusCode,403);
+  assert.equal((await call('PUT','/v1/driver/draft',{...draft,verified:true},driver)).statusCode,400);
+  assert.equal((await call('PUT','/v1/driver/draft',draft,driver)).statusCode,200);
+  assert.deepEqual((await call('GET','/v1/driver/draft',undefined,driver)).json().draft,draft);
+  const other=await verify(await challenge('07700000007','driver'));
+  assert.equal((await call('GET','/v1/driver/draft',undefined,other)).json().draft,null);
  });
  await t.test('only local operator can review and decision is audited once',async()=>{
   const url='/v1/internal/driver-reviews/'+driver.user.id+'/decision';const body={decision:'approved',reason:'فحص اختبار يدوي'};
@@ -79,7 +93,7 @@ test('persistent server registration and authorization',async t=>{
  });
  await t.test('accounts and driver documents persist after database and server restart',async()=>{
   await app.close();await store.close();store=await openStore({dataDir:path.join(dir,'db')});app=await createApp({...options,store});
-  const me=await call('GET','/v1/me',undefined,driver);assert.equal(me.statusCode,200,me.body);assert.equal(me.json().user.driver.review_status,'approved');assert.equal((await call('GET','/v1/driver/documents/'+documentId,undefined,driver)).statusCode,200);
+  const me=await call('GET','/v1/me',undefined,driver);assert.equal(me.statusCode,200,me.body);assert.equal(me.json().user.driver.review_status,'approved');assert.equal((await call('GET','/v1/driver/draft',undefined,driver)).json().draft.plate,'مسودة مركبة');assert.equal((await call('GET','/v1/driver/documents/'+documentId,undefined,driver)).statusCode,200);
  });
  await t.test('concurrent verification consumes a challenge exactly once',async()=>{
   const id=await challenge('07700000006');const results=await Promise.all([call('POST','/v1/auth/otp/verify',{challengeId:id,code:codes.get(id)}),call('POST','/v1/auth/otp/verify',{challengeId:id,code:codes.get(id)})]);
@@ -88,6 +102,22 @@ test('persistent server registration and authorization',async t=>{
  await t.test('expired session no longer exposes account data',async()=>{
   clock+=8*86400000;assert.equal((await call('GET','/v1/me',undefined,driver)).statusCode,401);
  });
+ await t.test('static navigation does not consume API quota while OTP IP limit remains enforced',async()=>{
+  for(let i=0;i<110;i++)assert.equal((await app.inject({method:'GET',url:'/assets/nonexistent.js',remoteAddress:'127.0.9.1'})).statusCode,404);
+  assert.equal((await app.inject({method:'GET',url:'/v1/health',remoteAddress:'127.0.9.1'})).statusCode,200);
+  for(let i=0;i<10;i++)assert.equal((await app.inject({method:'POST',url:'/v1/auth/otp/request',remoteAddress:'127.0.9.2',headers:{origin},payload:{name:'غير صالح',phone:'123',role:'passenger',consent:true}})).statusCode,400);
+  assert.equal((await app.inject({method:'POST',url:'/v1/auth/otp/request',remoteAddress:'127.0.9.2',headers:{origin},payload:{name:'غير صالح',phone:'123',role:'passenger',consent:true}})).statusCode,429);
+ });
  await t.test('production refuses test authentication startup',async()=>{await assert.rejects(createApp({...options,store,production:true}),/Production launch is disabled/)});
  }finally{await app.close();await store.close();await rm(dir,{recursive:true,force:true})}
+});
+
+test('migration upgrades an existing auth database without losing accounts',async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'khatti-upgrade-'));const dbPath=path.join(directory,'db');const id=randomUUID();let upgraded;
+ try {
+  const legacy=new PGlite(dbPath);await legacy.waitReady;await legacy.exec(await readFile(new URL('../../server/migrations/001-auth.sql',import.meta.url),'utf8'));
+  await legacy.query('INSERT INTO users(id,full_name,phone_e164,phone_verified_at,privacy_version,consent_at) VALUES($1,$2,$3,now(),$4,now())',[id,'حساب محفوظ سابقًا','+9647709999999','development-v1']);await legacy.close();
+  upgraded=await openStore({dataDir:dbPath});assert.equal((await upgraded.query('SELECT full_name FROM users WHERE id=$1',[id])).rows[0].full_name,'حساب محفوظ سابقًا');assert.equal((await upgraded.query('SELECT count(*)::int AS n FROM driver_drafts')).rows[0].n,0);assert.equal((await upgraded.query('SELECT count(*)::int AS n FROM schema_migrations')).rows[0].n,2);
+  await upgraded.close();upgraded=await openStore({dataDir:dbPath});assert.equal((await upgraded.query('SELECT count(*)::int AS n FROM schema_migrations')).rows[0].n,2);
+ }finally{await upgraded?.close();await rm(directory,{recursive:true,force:true})}
 });

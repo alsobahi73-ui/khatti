@@ -19,11 +19,11 @@ test('registration is in package; direct role pages require simulated account',a
  await page.goto('/passenger/search.html');await expect(page).toHaveURL(/register.html\?role=passenger/);
  await page.locator('#pname').fill('راكب تجريبي');await page.locator('#pphone').fill('123');await page.locator('#psend').click();await expect(page.locator('#toast')).toContainText('رقم الهاتف');
  await page.locator('#pphone').fill('07700000000');await page.locator('#psend').click();await expect(page.locator('#toast')).toContainText('لم يُرسل');
- await page.locator('#pcode').fill('1234');await page.locator('#pverify').click();await page.locator('#pname').fill('اسم آخر');await page.locator('#pdone').click();await expect(page.locator('#toast')).toContainText('أعد محاكاة');
+ await page.locator('#pcode').fill('1234');await page.locator('#pverify').click();await expect(page.locator('#pdone')).toBeVisible();await page.locator('#passenger-edit').click();await expect(page.locator('#pname')).toBeVisible();await expect(page.locator('#pdone')).toHaveCount(0);
 });
 test('booking rejects bad input then creates one explicitly local trip',async({page})=>{
  await account(page);await page.goto('/passenger/booking.html?id=l1');await page.locator('#ok').click();await expect(page.locator('#toast')).toContainText('رقمًا عراقيًا');
- await page.locator('#ph').fill('07700000000');await page.locator('[data-p=zain]').click();await page.locator('#ok').click();await expect(page.locator('#toast')).toContainText('لا حجز فعلي ولا دفع');await expect(page.locator('#ok')).toBeDisabled();
+ await page.locator('#ph').fill('07700000000');await page.locator('[data-p=zain]').click();await page.locator('#ok').click();expect(await page.evaluate(()=>K.get('bookings',[]).length)).toBe(0);await page.locator('#confirm-booking').click();await expect(page.locator('#toast')).toContainText('لا حجز فعلي ولا دفع');await expect(page.locator('#confirm-booking')).toHaveCount(0);
  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('khatti_demo_v1_bookings')).length)).toBe(1);
 });
 test('SOS states that nothing was sent',async({page})=>{
@@ -62,8 +62,8 @@ test('malformed local records are ignored and storage failures never report succ
  await page.goto('/passenger/trips.html');await expect(page.locator('#app')).toContainText('لا توجد رحلات');
  await page.goto('/passenger/booking.html?id=l1');await page.locator('#ph').fill('07700000000');
  await page.evaluate(()=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.endsWith('_trips'))throw new DOMException('full','QuotaExceededError');return original.call(this,k,v)}});
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.locator('#ok').click();await expect(page.locator('#toast')).toContainText('لم تكتمل العملية');
- expect(await page.evaluate(()=>K.get('bookings',[]).length)).toBe(0);expect(errors).toEqual(['تعذر الحفظ المحلي']);
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.locator('#ok').click();await page.locator('#confirm-booking').click();await expect(page.locator('#toast')).toContainText('لم تكتمل العملية');
+ expect(await page.evaluate(()=>K.get('bookings',[]).length)).toBe(0);expect(errors).toEqual([]);
 });
 test('stopping parent simulation cancels delayed notifications',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/parent/index.html');await page.locator('#simB').click();await page.waitForTimeout(1700);await expect(page.locator('#state')).toContainText('لا توجد رحلة نشطة');expect(errors).toEqual([]);

@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 export interface Sql { query(sql: string, params?: any[]): Promise<{ rows: any[] }> }
 export interface Store extends Sql { transaction<T>(fn: (db: Sql) => Promise<T>): Promise<T>; close(): Promise<void> }
 export async function openStore(options: { databaseUrl?: string; dataDir?: string } = {}): Promise<Store> {
@@ -17,13 +17,19 @@ export async function openStore(options: { databaseUrl?: string; dataDir?: strin
   await db.waitReady;
   store = { query: (sql, params) => db.query(sql, params), transaction: fn => db.transaction(tx => fn(tx)), close: () => db.close() };
  }
- const migration = await readFile(new URL('./migrations/001-auth.sql', import.meta.url), 'utf8');
- // The initial migration is additive and idempotent; later changes require numbered migrations.
- if (options.databaseUrl) await store.transaction(async db => { await db.query(migration) });
- else {
-  // PGlite prepared queries accept one statement; use exec for this trusted migration only.
-  const embedded = store;
-  for (const statement of migration.split(';').map(s => s.trim()).filter(Boolean)) await embedded.query(statement);
- }
+ await store.query('CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+ const directory=new URL('./migrations/',import.meta.url);
+ try {
+  for(const filename of (await readdir(directory)).filter(f=>/^\d+-[a-z-]+\.sql$/.test(f)).sort()) {
+   const version=filename.replace(/\.sql$/,'');
+   if((await store.query('SELECT 1 FROM schema_migrations WHERE version=$1',[version])).rows.length)continue;
+   const source=await readFile(new URL(filename,directory),'utf8');
+   await store.transaction(async db=>{
+    for(const statement of source.split(';').map(s=>s.trim()).filter(Boolean))await db.query(statement);
+    await db.query('INSERT INTO schema_migrations(version) VALUES($1) ON CONFLICT DO NOTHING',[version]);
+   });
+  }
+ } catch(error) { await store.close();throw error }
+
  return store;
 }
