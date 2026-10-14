@@ -12,19 +12,19 @@
 </head>
 <body><div class="wrap"><main id="app"></main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
-  if(!K.access())return;
+  const esc=value=>String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const id=new URLSearchParams(location.search).get("id")||"l1";
-  const l=K.line(id);
+  const l=LINES.some(line=>line.id===id)?K.line(id):null;
   K.page("التتبع اللحظي للسائق والراكب","search.html");
   if(!l){
     $("#app").innerHTML='<div class="bigempty">الخط غير موجود في هذا العرض التجريبي.<br><a class="btn btn-p" href="search.html">الرجوع للبحث</a></div>';
     return;
   }
 
-  const route=Array.isArray(l.route)&&l.route.length>=2?l.route:[[33.301,44.425],[33.288,44.405],[33.272,44.382]];
+  const route=Array.isArray(l.route)&&l.route.length>=2&&l.route.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&Math.abs(p[0])<=90&&Math.abs(p[1])<=180)?l.route:[[33.301,44.425],[33.288,44.405],[33.272,44.382]];
   let driverPos=[...route[0]];
   let passengerPos=[route[Math.min(1,route.length-1)][0]+0.002, route[Math.min(1,route.length-1)][1]-0.002];
   let driverSpeed=38;
@@ -32,29 +32,30 @@
   let autoMove=true;
   let alerted5Min=false;
 
-  const bc=typeof BroadcastChannel!=="undefined"?new BroadcastChannel("khatti_live_track"):null;
+  let gpsActive=false;
+  const validPoint=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&Math.abs(p[0])<=90&&Math.abs(p[1])<=180;
 
   $("#app").innerHTML=`
     <div class="card">
       <div class="row" style="flex-wrap:wrap;">
-        <span><i class="pulse-dot"></i><b>انتقال لحظي مباشر: ${K.esc(l.from)} ← ${K.esc(l.to)}</b></span>
+        <span><i class="pulse-dot"></i><b>محاكاة حركة: ${esc(l.from)} ← ${esc(l.to)}</b></span>
         <span class="grow"></span>
-        <span id="eta-badge" class="badge b-m">متصل لحظياً</span>
+        <span id="eta-badge" class="badge b-m">عرض تجريبي محلي</span>
       </div>
 
-      <div class="live-hud">
+      <p class="note">عرض تجريبي: الحافلة وحركتها افتراضيتان، ولا يوجد اتصال بسائق حقيقي. المسافة مباشرة والوقت تقديري وليسا ملاحة طرق. GPS يعرض موقعك في هذه الصفحة فقط دون حفظه أو مشاركته.</p><p id="gps-status" class="mut" role="status" aria-live="polite">GPS غير مفعل</p><div class="live-hud">
         <div class="hud-box"><b id="hud-dist">-- متر</b><span>المسافة بينكما</span></div>
-        <div class="hud-box"><b id="hud-eta">-- د</b><span>وصول السائق إليك</span></div>
-        <div class="hud-box"><b id="hud-speed">38 كم/س</b><span>سرعة الحافلة</span></div>
+        <div class="hud-box"><b id="hud-eta">-- د</b><span>وصول تقديري في المحاكاة</span></div>
+        <div class="hud-box"><b id="hud-speed">38 كم/س</b><span>سرعة افتراضية</span></div>
       </div>
 
       <div id="map" class="map-wrap" title="اضغط على الخريطة لتحريك موقع الراكب فوراً"></div>
 
       <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px;">
-        <button class="btn btn-p" id="btn-toggle-sim">⏸️ إيقاف/تشغيل الحركة اللحظية</button>
+        <button class="btn btn-p" id="btn-toggle-sim">⏸️ إيقاف المحاكاة</button>
         <button class="btn btn-g" id="btn-my-gps">📡 تفعيل موقعي الحقيقي (GPS)</button>
         <button class="btn btn-g" id="btn-walk-stop">🚶‍♂️ تحريك الراكب نحو السائق</button>
-        <button class="btn btn-a" id="sos">🚨 نداء طوارئ (SOS)</button>
+        <button class="btn btn-a" id="sos">🚨 تجربة الطوارئ (لا يُرسل بلاغ)</button>
       </div>
       <div class="mut" style="margin-top:6px;font-size:12px;" id="coords-bar"></div>
     </div>
@@ -68,17 +69,17 @@
       mapObj=L.map("map",{zoomControl:true}).setView(driverPos,13);
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(mapObj);
       L.polyline(route,{color:"#123a5c",weight:4,opacity:0.75}).addTo(mapObj);
-      busMarker=L.marker(driverPos,{icon:L.divIcon({className:"mapbus",html:'<div style="font-size:24px;">🚌</div>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(mapObj).bindPopup("🚌 موقع السائق المباشر");
-      paxMarker=L.marker(passengerPos,{draggable:true,icon:L.divIcon({className:"mappax",html:'<div style="font-size:22px;">🙋‍♂️</div>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(mapObj).bindPopup("📍 موقع الراكب المباشر");
+      busMarker=L.marker(driverPos,{icon:L.divIcon({className:"mapbus",html:'<div style="font-size:24px;">🚌</div>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(mapObj).bindPopup("🚌 موقع السائق الافتراضي");
+      paxMarker=L.marker(passengerPos,{draggable:true,icon:L.divIcon({className:"mappax",html:'<div style="font-size:22px;">🙋‍♂️</div>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(mapObj).bindPopup("📍 موضع الراكب في العرض");
       paxMarker.on("drag",e=>{
         const ll=e.target.getLatLng();
-        passengerPos=[ll.lat,ll.lng];
+        stopGPS();passengerPos=[ll.lat,ll.lng];
         syncLocations("passenger");
       });
       mapObj.on("click",e=>{
-        passengerPos=[e.latlng.lat,e.latlng.lng];
+        stopGPS();passengerPos=[e.latlng.lat,e.latlng.lng];
         syncLocations("passenger_tap");
-        K.toast("🙋‍♂️ تم تحديث موقع الراكب لحظياً على الخريطة");
+        K.toast("🙋‍♂️ تم تحديث موضع الراكب في المحاكاة");
       });
       linkLine=L.polyline([driverPos,passengerPos],{color:"#10b981",weight:3,dashArray:"6,6"}).addTo(mapObj);
       setTimeout(()=>mapObj.invalidateSize(),300);
@@ -90,7 +91,7 @@
     const lngToX=lng=>Math.max(25,Math.min(475,Math.round(60+((lng-44.375)/0.055)*380)));
     const bx=lngToX(driverPos[1]), by=latToY(driverPos[0]);
     const px=lngToX(passengerPos[1]), py=latToY(passengerPos[0]);
-    mapEl.innerHTML=`
+    mapEl.innerHTML=`<div style="position:absolute;top:4px;right:8px;background:white;z-index:1">تعذّر تحميل الخريطة — رسم تخطيطي تجريبي</div>
       <svg id="fallback-svg" viewBox="0 0 500 260" width="100%" height="100%">
         <path d="M 190,0 Q 230,95 210,150 T 260,260" fill="none" stroke="#38bdf8" stroke-width="22" opacity="0.55"/>
         <line x1="80" y1="190" x2="420" y2="60" stroke="#123a5c" stroke-width="4" stroke-dasharray="8,5" opacity="0.6"/>
@@ -115,7 +116,7 @@
         const r=svg.getBoundingClientRect();
         const x=((ev.clientX-r.left)/r.width)*500;
         const y=((ev.clientY-r.top)/r.height)*260;
-        passengerPos=[33.265+((220-y)/180)*0.045, 44.375+((x-60)/380)*0.055];
+        stopGPS();passengerPos=[33.265+((220-y)/180)*0.045, 44.375+((x-60)/380)*0.055];
         syncLocations("passenger_tap");
         K.toast("🙋‍♂️ انتقل مكان الراكب فوراً إلى النقطة المحددة");
       };
@@ -123,19 +124,19 @@
   }
 
   function updateHUD(){
-    const dKm=KhattiCore.dist(driverPos,passengerPos);
+    const dKm=K.dist(driverPos,passengerPos);
     const meters=Math.round(dKm*1000);
     const distText=meters<1000?meters+" متر":dKm.toFixed(2)+" كم";
     const etaMin=Math.max(1,Math.ceil((dKm/Math.max(15,driverSpeed))*60));
     $("#hud-dist").textContent=distText;
-    $("#hud-eta").textContent=meters<60?"وصل إليك ✓":etaMin+" د";
+    $("#hud-eta").textContent=meters<60?"تقارب افتراضي ✓":etaMin+" د";
     $("#hud-speed").textContent=driverSpeed+" كم/س";
-    $("#eta-badge").textContent=meters<60?"التقت الحافلة بالراكب ✓":"وصول السائق: ~"+etaMin+" د";
+    $("#eta-badge").textContent=meters<60?"تقارب في العرض التجريبي":"تقدير افتراضي: ~"+etaMin+" د";
     $("#coords-bar").textContent=`🚌 السائق: [${driverPos[0].toFixed(4)}, ${driverPos[1].toFixed(4)}] | 🙋‍♂️ الراكب: [${passengerPos[0].toFixed(4)}, ${passengerPos[1].toFixed(4)}]`;
 
     if(!alerted5Min && etaMin<=5 && meters>=60){
       alerted5Min=true;
-      K.toast("🔔 تنبيه اقتراب: السائق على بُعد أقل من "+etaMin+" دقائق من موقعك!");
+      K.toast("🔔 محاكاة تنبيه اقتراب: التقدير "+etaMin+" دقائق من موقعك!");
     }
 
     if(mapObj && busMarker && paxMarker && linkLine){
@@ -148,25 +149,18 @@
   }
 
   function syncLocations(who){
-    const payload={lineId:l.id,driverPos,passengerPos,driverSpeed,ts:Date.now(),who};
-    K.set("live_pos_"+l.id,payload);
-    if(bc)bc.postMessage(payload);
     updateHUD();
   }
 
-  if(bc){
-    bc.onmessage=ev=>{
-      if(ev.data && ev.data.lineId===l.id){
-        if(ev.data.driverPos)driverPos=ev.data.driverPos;
-        if(ev.data.passengerPos)passengerPos=ev.data.passengerPos;
-        if(ev.data.driverSpeed)driverSpeed=ev.data.driverSpeed;
-        updateHUD();
-      }
-    };
+  function stopGPS(){
+    gpsActive=false;
+    if(gpsWatchId!==null&&navigator.geolocation)navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId=null;
+    $("#btn-my-gps").textContent="📡 تفعيل موقعي الحقيقي (GPS)";
+    $("#gps-status").textContent="GPS غير مفعل؛ لا توجد مشاركة للموقع";
   }
-
-  setInterval(()=>{
-    if(!autoMove)return;
+  const movementTimer=  setInterval(()=>{
+    if(!autoMove||gpsActive)return;
     const dLat=passengerPos[0]-driverPos[0];
     const dLng=passengerPos[1]-driverPos[1];
     if(Math.hypot(dLat,dLng)>0.0007){
@@ -181,11 +175,13 @@
   },950);
 
   $("#btn-toggle-sim").onclick=function(){
+    if(gpsActive)stopGPS();
     autoMove=!autoMove;
-    this.textContent=autoMove?"⏸️ إيقاف الحركة اللحظية":"▶️ تشغيل الحركة اللحظية";
+    this.textContent=autoMove?"⏸️ إيقاف المحاكاة":"▶️ تشغيل المحاكاة";
   };
 
   $("#btn-walk-stop").onclick=function(){
+    stopGPS();
     passengerPos=[
       passengerPos[0]+(driverPos[0]-passengerPos[0])*0.35,
       passengerPos[1]+(driverPos[1]-passengerPos[1])*0.35
@@ -199,22 +195,26 @@
       K.toast("المتصفح لا يدعم GPS — اضغط على الخريطة لتحريك موقعك مباشرة");
       return;
     }
-    if(gpsWatchId!==null){
-      navigator.geolocation.clearWatch(gpsWatchId);
-      gpsWatchId=null;
-      this.textContent="📡 تفعيل موقعي الحقيقي (GPS)";
-      K.toast("تم إيقاف بث GPS الحقيقي");
-      return;
-    }
-    this.textContent="🟢 جاري بث موقعك الحقيقي لحظياً...";
-    gpsWatchId=navigator.geolocation.watchPosition(pos=>{
-      passengerPos=[pos.coords.latitude,pos.coords.longitude];
-      syncLocations("passenger_gps");
-      if(mapObj)mapObj.panTo(passengerPos);
-    },()=>{
-      K.toast("يمكنك الضغط على الخريطة أو سحب أيقونة الراكب لتحريك موقعك مباشرة");
-    },{enableHighAccuracy:true,maximumAge:2000});
+    if(gpsActive){stopGPS();return;}
+    autoMove=false;$("#btn-toggle-sim").textContent="▶️ تشغيل المحاكاة";
+    gpsActive=true;$("#gps-status").textContent="جارٍ طلب إذن الموقع…";
+    this.textContent="إيقاف GPS";
+    try{
+      gpsWatchId=navigator.geolocation.watchPosition(pos=>{
+        if(!gpsActive)return;
+        const point=[pos.coords.latitude,pos.coords.longitude];
+        if(!validPoint(point)){stopGPS();$("#gps-status").textContent="إحداثيات غير صالحة. أعد المحاولة.";return;}
+        passengerPos=point;updateHUD();
+        $("#gps-status").textContent="موقع الهاتف معروض محليًا فقط؛ السائق افتراضي";
+        if(mapObj)mapObj.panTo(passengerPos);
+      },error=>{
+        if(!gpsActive)return;
+        stopGPS();$("#gps-status").textContent=error.code===1?"رُفض إذن الموقع. استخدم الخريطة أو المحاكاة.":"تعذّر تحديد الموقع. تحقق من GPS ثم أعد المحاولة.";
+      },{enableHighAccuracy:true,maximumAge:2000,timeout:12000});
+      if(!gpsActive){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
+    }catch(error){stopGPS();$("#gps-status").textContent="تعذّر تشغيل GPS في هذا المتصفح.";}
   };
+  window.addEventListener('pagehide',()=>{clearInterval(movementTimer);stopGPS();if(mapObj)mapObj.remove();},{once:true});
 
   $("#sos").onclick=function(){
     K.toast("وضع الطوارئ محاكى محلياً ولم يتم إرسال بلاغ خارجي");
