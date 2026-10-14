@@ -2,18 +2,25 @@
 <body><div class="wrap"><main id="app">
 <div class="tabs"><span class="tab on">🚌 خطوط دائمة</span><a class="tab" href="holiday.html" style="text-decoration:none;color:inherit">🎉 رحلات العطل</a></div>
 <div class="card"><h3>🔍 ابحث عن خط</h3>
+<div class="field"><label>من أين؟</label><button class="btn btn-g" id="choose-origin">📍 حدد مكان الانطلاق على الخريطة</button><div class="mut" id="origin-status" role="status">لم يُحدد موقعك بعد</div></div>
+<div class="field"><label>إلى أين؟</label><button class="btn btn-g" id="choose-destination">🏁 حدد وجهتك على الخريطة</button><div class="mut" id="destination-status" role="status">لم تُحدد الوجهة بعد</div></div>
+<button class="btn btn-g" id="locate">◎ استخدم موقع هاتفي للانطلاق</button>
+<button class="btn btn-g" id="clear-points">مسح الموقع والوجهة</button>
+<p class="mut" id="location-status" role="status" aria-live="polite">الموقع يُطلب بعد ضغطك فقط. النتائج خطوط تجريبية في بغداد، والمسافات تقريبية وليست مسارات قيادة.</p>
+<details id="manual-filters"><summary>اختيار يدوي بالمحافظة والمنطقة والجهة</summary>
 <div class="field"><label for="gov">المحافظة</label><select id="gov" aria-controls="area"></select></div>
-<div class="field"><label for="area">المدينة / المنطقة</label><select id="area"><option value="">كل المدن والمناطق</option></select><div class="mut" id="cities-status" role="status" aria-live="polite"></div></div>
-<div class="field"><label>الجهة (جامعة / دائرة)</label><select id="uni"><option value="">كل الجهات</option></select></div>
+<div class="field"><label for="area">المدينة / المنطقة</label><select id="area"><option value="">كل المدن والمناطق</option></select><div class="mut" id="cities-status" role="status"></div></div>
+<div class="field"><label for="uni">الجهة (جامعة / دائرة)</label><select id="uni"><option value="">كل الجهات</option></select></div>
+</details>
 <div class="chips" id="fcomp">
 <button class="chip on" data-c="">الكل</button><button class="chip" data-c="girls">بنات فقط</button><button class="chip" data-c="boys">شباب فقط</button><button class="chip" data-c="mixed">مختلط</button>
 </div>
 <button class="btn btn-p" id="go">ابحث</button>
-<button class="btn btn-g" id="pinmode">📍 بحث بالدبوس — ضع دبوس بيتك على الخريطة</button>
+
 </div>
-<div class="card" id="pinbox" style="display:none"><h3>ضع دبوس بيتك</h3><div class="mapbox" id="pmap"></div><div class="mut" style="margin-top:6px">اضغط على الخريطة لتحديد موقعك — ستُرتّب الخطوط حسب القرب منك.</div></div>
+<div class="card" id="pinbox" style="display:none"><h3 id="map-title">حدد مكان الانطلاق</h3><div class="mapbox" id="pmap"></div><p class="mut" id="map-help" role="status">حرّك الخريطة واضغط على مكان الانطلاق.</p><button class="btn btn-g" id="close-map">إغلاق الخريطة</button></div>
 <div id="results"></div>
-<div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">احفظ طلبك وسنُشعرك فور توفر خط يطابقك — صلاحية الطلب 30 يومًا.</p><button class="btn btn-a" id="notifybtn">🔔 أعلمني عند التوفر</button></div>
+<div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">لا توجد بيانات تجريبية قريبة من اختيارك. يمكنك حفظ الطلب محليًا للتجربة؛ لن يُرسل إشعار فعلي.</p><button class="btn btn-a" id="notifybtn">حفظ طلب تجريبي</button></div>
 </main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="../assets/data.js"></script><script src="../assets/locations.js"></script><script src="../assets/app.js"></script>
@@ -26,27 +33,47 @@ function selectedLocation(){return KhattiLocations.find(g=>g.name===governorate.
 function updateCities(){const region=selectedLocation();area.replaceChildren(new Option('كل المدن والمناطق',''));region.cities.forEach(city=>area.add(new Option(city,city)));document.getElementById('cities-status').textContent='مدن ومناطق رئيسية في '+region.name}
 updateCities();
 UNIS.forEach(u=>uni.insertAdjacentHTML("beforeend",`<option>${u}</option>`));
-let fc="",pin=null,pmap=null,pinMk=null;
+let fc="",pin=null,destination=null,pmap=null,pinMk=null,destinationMk=null,selecting="origin",locating=false;
 $("#fcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#fcomp .chip").forEach(c=>c.classList.remove("on"));b.classList.add("on");fc=b.dataset.c;doSearch()});
-$("#go").onclick=doSearch;$("#gov").onchange=()=>{updateCities();uni.value='';pin=null;if(pinMk){pinMk.remove();pinMk=null}if(pmap)pmap.setView(selectedLocation().center,11);doSearch()};
+$("#go").onclick=doSearch;$("#gov").onchange=()=>{updateCities();uni.value='';clearPoints();if(pmap)pmap.setView(selectedLocation().center,11);doSearch()};
 area.onchange=doSearch;uni.onchange=doSearch;
 function doSearch(){
  const g=$("#gov").value;const box=$("#results"),nt=$("#notify");box.innerHTML="";
- if(g!=="بغداد"){nt.style.display="block";return}
+ if(!pin&&!destination&&g!=="بغداد"){nt.style.display="block";return}
  let ls=LINES.map(l=>K.line(l.id));
- if(area.value)ls=ls.filter(l=>l.from===area.value);
- if(uni.value)ls=ls.filter(l=>l.to===uni.value);
+ if(!pin&&!destination&&area.value)ls=ls.filter(l=>l.from===area.value);
+ if(!pin&&!destination&&uni.value)ls=ls.filter(l=>l.to===uni.value);
  if(fc)ls=ls.filter(l=>l.comp===fc);
- if(pin){ls=ls.map(l=>({...l,_d:K.dist(pin,l.route[0])})).sort((a,b)=>a._d-b._d);
-  box.innerHTML='<div class="note">📍 مرتبة حسب القرب من دبوسك'+(ls[0]?` — أقرب خط على بعد ${ls[0]._d.toFixed(1)} كم`:"")+'</div>'}
+ ls=ls.map(l=>({...l,_d:pin?K.dist(pin,l.route[0]):0,_end:destination?K.dist(destination,l.route[l.route.length-1]):0}));
+ if(pin)ls=ls.filter(l=>l._d<=5);
+ if(destination)ls=ls.filter(l=>l._end<=5);
+ ls.sort((a,b)=>(pin||destination)?((a._d+a._end)-(b._d+b._end)):(b.trusted-a.trusted)||(b.rating-a.rating));
+
  if(!ls.length){nt.style.display="block";return}
  nt.style.display="none";
- ls.sort((a,b)=>(b.trusted-a.trusted)||(b.rating-a.rating));
- box.innerHTML=ls.map(l=>K.lineCard(l)).join("");
+
+ box.innerHTML=((pin||destination)?'<div class="note">خطوط تجريبية ضمن 5 كم من كل نقطة مختارة، مرتبة بمجموع المسافات المباشرة لنقطتي البداية والنهاية.</div>':'')+ls.map(l=>K.lineCard(l)).join("");
 }
-$("#pinmode").onclick=()=>{const b=$("#pinbox");b.style.display=b.style.display==="none"?"block":"none";
- if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",selectedLocation().center,11);
-  if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}};
-$("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:$("#gov").value,area:area.value,uni:uni.value,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("تم حفظ طلبك — سنُشعرك عند توفر خط مطابق 🔔")};
+function clearPoints(){pin=null;destination=null;for(const marker of [pinMk,destinationMk])if(marker)marker.remove();pinMk=null;destinationMk=null;$("#origin-status").textContent='لم يُحدد موقعك بعد';$("#destination-status").textContent='لم تُحدد الوجهة بعد'}
+function setPoint(kind,point){
+ if(!Array.isArray(point)||point.length!==2||!point.every(Number.isFinite)||point[0]<29||point[0]>38||point[1]<38||point[1]>49){$("#location-status").textContent='اختر نقطة داخل العراق.';return}
+ const origin=kind==='origin';if(origin)pin=point;else destination=point;
+ $(origin?'#origin-status':'#destination-status').textContent='تم تحديد '+(origin?'الانطلاق':'الوجهة')+' ('+point.map(n=>n.toFixed(4)).join(', ')+')';
+ if(pmap){let marker=origin?pinMk:destinationMk;if(marker)marker.setLatLng(point);else{marker=L.marker(point).addTo(pmap).bindPopup(origin?'الانطلاق':'الوجهة');if(origin)pinMk=marker;else destinationMk=marker}}
+ $("#location-status").textContent='يمكنك تغيير النقطتين بالضغط على حقلي الانطلاق والوجهة. حدود العراق هنا تقريبية.';doSearch();
+}
+function openMap(kind){selecting=kind;$("#pinbox").style.display='block';$("#map-title").textContent=kind==='origin'?'حدد مكان الانطلاق':'حدد الوجهة';$("#map-help").textContent='اضغط على الخريطة لتحديد '+(kind==='origin'?'الانطلاق':'الوجهة')+'.';
+ if(!pmap){pmap=K.map('pmap',pin||selectedLocation().center,11);if(pmap){pmap.on('click',e=>setPoint(selecting,[e.latlng.lat,e.latlng.lng]));for(const [k,p] of [['origin',pin],['destination',destination]])if(p)setPoint(k,p)}}
+ if(pmap){pmap.invalidateSize();pmap.setView((kind==='origin'?pin:destination)||pin||selectedLocation().center,12)}else $("#map-help").textContent='تعذّر تحميل الخريطة. تحقق من الإنترنت أو استخدم الاختيار اليدوي.';
+}
+$("#choose-origin").onclick=()=>openMap('origin');$("#choose-destination").onclick=()=>openMap('destination');
+$("#close-map").onclick=()=>{$("#pinbox").style.display='none'};
+$("#clear-points").onclick=()=>{clearPoints();doSearch()};
+$("#locate").onclick=()=>{
+ if(locating)return;if(!navigator.geolocation){$("#location-status").textContent='المتصفح لا يدعم تحديد الموقع. حدد نقطة بالخريطة أو اختر يدويًا.';return}
+ locating=true;$("#locate").disabled=true;$("#location-status").textContent='جارٍ طلب موقعك…';
+ navigator.geolocation.getCurrentPosition(p=>{locating=false;$("#locate").disabled=false;setPoint('origin',[p.coords.latitude,p.coords.longitude]);},e=>{locating=false;$("#locate").disabled=false;$("#location-status").textContent=e.code===1?'لم تسمح بمشاركة الموقع. يمكنك تحديده بالخريطة أو الاختيار اليدوي.':'تعذّر تحديد الموقع. تحقق من GPS أو اختر بالخريطة.';},{enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+};
+$("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:pin||destination?null:$("#gov").value,area:pin||destination?null:area.value,uni:pin||destination?null:uni.value,origin:pin,destination:destination,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("حُفظ الطلب محليًا للتجربة فقط؛ لم يُرسل ولم يُفعّل إشعار")};
 doSearch();
 </script></body></html>
