@@ -14,9 +14,10 @@
 <div class="note">💡 <b>الأمان أولًا:</b> محاكاة بلاغات وتقييم وتتبع وشارات؛ لا خدمات أمان حقيقية متصلة بهذا النموذج.</div>
 </main><footer class="app">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
 </div>
-<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
+<script src="assets/runtime.js"></script><script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
 <script>
 (function(){
+if(window.KHATTI_RUNTIME?.mode==="server"){document.querySelectorAll('a[href="passenger/search.html"],a[href="driver/index.html"],a[href="parent/index.html"]').forEach(a=>a.href="register.html");document.querySelector("#rc-reg b").textContent="التسجيل / حسابي المحفوظ على الخادم";return;}
 if(!K.access())return;
 /* التسجيل إلزامي (§3.12): بطاقات الأدوار تمر عبر التسجيل ما لم يوجد حساب */
 const me=K.get("me",null),dv=K.get("driver",null);

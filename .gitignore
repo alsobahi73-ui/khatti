@@ -4,3 +4,7 @@ android/
 ios/
 test-results/
 playwright-report/
+
+.local-auth/
+.env
+.env.*

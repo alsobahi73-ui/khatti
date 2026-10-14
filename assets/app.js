@@ -60,13 +60,13 @@ app.prepend(box)}
 });
 
 /* بوابة محاكاة محلية فقط؛ لا تُعد مصادقة أو صلاحيات أمنية. */
-K.access=function(){const p=location.pathname;const driver=p.includes("/driver/"),passenger=p.includes("/passenger/");if(!driver&&!passenger)return true;const account=this.get(driver?"driver":"me",null);if(!account||!KhattiCore.name(account.name)||(driver&&!account.verified)){location.replace("../register.html?role="+(driver?"driver":"passenger"));return false}return true};
+K.access=function(){if(window.KHATTI_RUNTIME?.mode==="server"){const app=document.querySelector("#app");if(app)app.innerHTML='<div class="note">هذه الوظيفة غير مرتبطة بالخادم بعد. الحسابات محفوظة في شاشة حسابي، والحجز والتتبع والدفع ما زالت تجريبية وغير متاحة بهذا الوضع.</div><a class="btn btn-p" href="../register.html">حسابي</a>';return false}const p=location.pathname;const driver=p.includes("/driver/"),passenger=p.includes("/passenger/");if(!driver&&!passenger)return true;const account=this.get(driver?"driver":"me",null);if(!account||!KhattiCore.name(account.name)||(driver&&!account.verified)){location.replace("../register.html?role="+(driver?"driver":"passenger"));return false}return true};
 const baseLine=K.line.bind(K);
 K.line=function(id){const l=baseLine(id);if(!l)return null;const used=this.get("bookings",[]).filter(b=>b.lineId===id&&b.status==="upcoming").length;return {...l,free:Math.max(0,l.free-used)}};
 K.missing=function(){document.querySelector("#app").innerHTML='<div class="bigempty">العنصر غير موجود أو حُذف من هذا العرض التجريبي.<br><a class="btn btn-p" href="'+(location.pathname.includes("/driver/")?'index.html':'search.html')+'">عودة</a></div>'};
-try{seedDemo()}catch(e){/* يبقى العرض متاحًا عند حظر التخزين */}
+try{if(window.KHATTI_RUNTIME?.mode!=="server")seedDemo()}catch(e){/* يبقى العرض متاحًا عند حظر التخزين */}
 document.addEventListener("DOMContentLoaded",()=>{
- const main=document.querySelector("main");if(main){const n=document.createElement("div");n.className="note";n.id="demo-notice";n.textContent="🧪 عرض تجريبي محلي: لا توثيق أمني أو حجز فعلي أو دفع أو تتبع حقيقي. لا تُرسل الرسائل أو البلاغات أو الاستغاثات لأي جهة. لا تدخل بيانات شخصية حقيقية.";main.before(n)}
+ const main=document.querySelector("main");if(main){const n=document.createElement("div");n.className="note";n.id="demo-notice";n.textContent=window.KHATTI_RUNTIME?.mode==="server"?"بيئة تطوير بحفظ خادمي للحسابات؛ SMS للاختبار فقط، لا تستخدم بيانات حقيقية.":"🧪 عرض تجريبي محلي: لا توثيق أمني أو حجز فعلي أو دفع أو تتبع حقيقي. لا تُرسل الرسائل أو البلاغات أو الاستغاثات لأي جهة. لا تدخل بيانات شخصية حقيقية.";main.before(n)}
 });
 window.addEventListener("error",e=>K.toast(e.message.includes("تعذر الحفظ المحلي")?"تعذّر الحفظ المحلي؛ لم تكتمل العملية. تحقق من التخزين.":"تعذّر إكمال العملية. أعد المحاولة أو ارجع للصفحة السابقة."));
 
