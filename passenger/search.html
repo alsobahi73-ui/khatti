@@ -2,8 +2,8 @@
 <body><div class="wrap"><main id="app">
 <div class="tabs"><span class="tab on">🚌 خطوط دائمة</span><a class="tab" href="holiday.html" style="text-decoration:none;color:inherit">🎉 رحلات العطل</a></div>
 <div class="card"><h3>🔍 ابحث عن خط</h3>
-<div class="field"><label>المحافظة</label><select id="gov"><option>بغداد</option><option>البصرة</option><option>الموصل</option><option>أربيل</option><option>النجف</option></select></div>
-<div class="field"><label>المنطقة</label><select id="area"><option value="">كل المناطق</option></select></div>
+<div class="field"><label for="gov">المحافظة</label><select id="gov" aria-controls="area"></select></div>
+<div class="field"><label for="area">المدينة / المنطقة</label><select id="area"><option value="">كل المدن والمناطق</option></select><div class="mut" id="cities-status" role="status" aria-live="polite"></div></div>
 <div class="field"><label>الجهة (جامعة / دائرة)</label><select id="uni"><option value="">كل الجهات</option></select></div>
 <div class="chips" id="fcomp">
 <button class="chip on" data-c="">الكل</button><button class="chip" data-c="girls">بنات فقط</button><button class="chip" data-c="boys">شباب فقط</button><button class="chip" data-c="mixed">مختلط</button>
@@ -16,15 +16,20 @@
 <div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">احفظ طلبك وسنُشعرك فور توفر خط يطابقك — صلاحية الطلب 30 يومًا.</p><button class="btn btn-a" id="notifybtn">🔔 أعلمني عند التوفر</button></div>
 </main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/locations.js"></script><script src="../assets/app.js"></script>
 <script>
 K.page("بحث عن خط","../index.html");
 const area=$("#area"),uni=$("#uni");
-AREAS.forEach(a=>area.insertAdjacentHTML("beforeend",`<option>${a}</option>`));
+const governorate=document.getElementById('gov');
+KhattiLocations.forEach(g=>governorate.add(new Option(g.name,g.name)));
+function selectedLocation(){return KhattiLocations.find(g=>g.name===governorate.value)||KhattiLocations[0]}
+function updateCities(){const region=selectedLocation();area.replaceChildren(new Option('كل المدن والمناطق',''));region.cities.forEach(city=>area.add(new Option(city,city)));document.getElementById('cities-status').textContent='مدن ومناطق رئيسية في '+region.name}
+updateCities();
 UNIS.forEach(u=>uni.insertAdjacentHTML("beforeend",`<option>${u}</option>`));
 let fc="",pin=null,pmap=null,pinMk=null;
 $("#fcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#fcomp .chip").forEach(c=>c.classList.remove("on"));b.classList.add("on");fc=b.dataset.c;doSearch()});
-$("#go").onclick=doSearch;$("#gov").onchange=doSearch;
+$("#go").onclick=doSearch;$("#gov").onchange=()=>{updateCities();uni.value='';pin=null;if(pinMk){pinMk.remove();pinMk=null}if(pmap)pmap.setView(selectedLocation().center,11);doSearch()};
+area.onchange=doSearch;uni.onchange=doSearch;
 function doSearch(){
  const g=$("#gov").value;const box=$("#results"),nt=$("#notify");box.innerHTML="";
  if(g!=="بغداد"){nt.style.display="block";return}
@@ -40,7 +45,7 @@ function doSearch(){
  box.innerHTML=ls.map(l=>K.lineCard(l)).join("");
 }
 $("#pinmode").onclick=()=>{const b=$("#pinbox");b.style.display=b.style.display==="none"?"block":"none";
- if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",[33.315,44.38],11);
+ if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",selectedLocation().center,11);
   if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}};
 $("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:$("#gov").value,area:area.value,uni:uni.value,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("تم حفظ طلبك — سنُشعرك عند توفر خط مطابق 🔔")};
 doSearch();
