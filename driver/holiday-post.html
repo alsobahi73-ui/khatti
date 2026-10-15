@@ -1,67 +1,91 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>رحلات العطل — السائق</title><link rel="stylesheet" href="../assets/style.css"></head>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>نشر رحلة عطلة — خطي</title><link rel="stylesheet" href="../assets/style.css"></head>
 <body><div class="wrap"><main id="app">
-<div class="note">🎉 أعلن عن <b>مقاعدك الشاغرة</b> في العطل والمناسبات — إعلان لمرة واحدة ينتهي تلقائيًا بعد موعد الرحلة. إعلانات السائقين الموثوقين تظهر أولًا.</div>
-<div class="card"><h3>📢 إعلان جديد عن مقاعد شاغرة</h3>
+<div class="note">🎉 <b>خط العطلة والمناسبات</b> — فرصة زيادة الدخل لنقل الطلاب والموظفين في العطل والامتحانات.</div>
+<div class="card"><h3>🎉 نشر رحلة خط جديدة</h3>
 <div class="field"><label>من</label><select id="pfrom"></select></div>
-<div class="field"><label>إلى (وجهة)</label><input id="pto" placeholder="مثال: متنزه الزوراء"></div>
-<div class="row"><div class="field grow"><label>التاريخ</label><input id="pdate" type="date"></div>
+<div class="field"><label>إلى</label><input id="pto" placeholder="مثال: مول المنصور، باب المعظم..."></div>
+<div class="row"><div class="field grow"><label>تاريخ الرحلة</label><input id="pdate" type="date"></div>
 <div class="field grow"><label>وقت الانطلاق</label><input id="ptime" type="time" value="08:00"></div></div>
-<div class="row"><div class="field grow"><label>عدد المقاعد الشاغرة</label><input id="pseats" type="number" min="1" max="60" value="4"></div>
-<div class="field grow"><label>السعر للمقعد (د.ع)</label><input id="pprice" type="number" min="0" value="5000"></div></div>
-<div class="field"><label>صفة الركاب</label></div>
-<div class="chips" id="pcomp"><button class="chip" data-c="girls">بنات فقط</button><button class="chip" data-c="boys">شباب فقط</button><button class="chip on" data-c="mixed">مختلط</button></div>
-<div class="field"><label>ملاحظة (اختياري)</label><input id="pnote" placeholder="مثال: العودة 18:00"></div>
-<button class="btn btn-a" id="ppub">نشر الإعلان 📢</button></div>
-<h3 style="margin:4px 0 8px">إعلاناتي النشطة</h3>
+<div class="row"><div class="field grow"><label>المقاعد المتاحة</label><input id="pseats" type="number" min="1" max="60" value="4"></div>
+<div class="field grow"><label>سعر المقعد (د.ع)</label><input id="pprice" type="number" min="0" value="5000"></div></div>
+<div class="field"><label>الفئة المسموحة</label></div>
+<div class="chips" id="pcomp"><button type="button" class="chip" data-c="girls">طالبات فقط</button><button type="button" class="chip" data-c="boys">شباب فقط</button><button type="button" class="chip active" data-c="mixed">مختلط</button></div>
+<div class="field"><label>ملاحظة أو تعليمات</label><input id="pnote" placeholder="مثال: الانطلاق 08:00 صباحاً بدون تأخير"></div>
+<button class="btn btn-a" id="ppub">📢 نشر الرحلة الآن</button></div>
+<h3 style="margin:4px 0 8px;">رحلاتي المعلنة</h3>
 <div id="myposts"></div>
-<h3 style="margin:4px 0 8px">📩 طلبات الركاب المعلقة</h3>
-<div class="mut" style="margin-bottom:8px">ركاب يطلبون مقاعد — قدّم عرضًا بإعلان يطابق طلبهم.</div>
+<h3 style="margin:4px 0 8px;">📩 الطلبات المباشرة والخاصة</h3>
+<div class="mut" style="margin-bottom:8px;">طلبات خاصة من الركاب يمكنك قبولها لإنشاء خط مباشر لها.</div>
 <div id="reqs"></div>
 </main></div>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
-K.page("رحلات العطل — السائق","index.html");
-const today=new Date().toISOString().slice(0,10);
-let pcomp="mixed";
-$("#pfrom").innerHTML=AREAS.map(a=>`<option>${a}</option>`).join("");
-$("#pdate").min=today;
-$("#pcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#pcomp .chip").forEach(c=>c.classList.remove("on"));b.classList.add("on");pcomp=b.dataset.c});
-function myPosts(){return K.get("holPosts",[]).filter(h=>h.date>=today)}
-function allReqs(){return HOLIDAY_REQUESTS.concat(K.get("holReqs",[]))}
-function renderPosts(){const p=myPosts();$("#myposts").innerHTML=p.length?p.map(h=>`
-<div class="card"><div class="row">${K.badge(h.comp)}<span class="grow"></span><span class="mut">📅 ${h.dlabel} — 🕗 ${h.time}</span></div>
-<div style="font-weight:800;margin:4px 0">${K.esc(h.from)} ← ${K.esc(h.to)}</div>
-<div class="mut">💺 ${K.holFree(h)} من ${h.seats} مقاعد شاغرة • ${K.fmt(h.price)}/مقعد</div>
-<button class="btn btn-g btn-s" style="margin-top:8px" onclick="delPost('${h.id}')">إلغاء الإعلان</button></div>`).join(""):'<div class="mut" style="margin-bottom:12px">لا توجد إعلانات نشطة.</div>'}
-function renderReqs(){const posts=myPosts();$("#reqs").innerHTML=allReqs().map(r=>{
-const matched=posts.some(p=>K.holMatch(p,r));
-return `<div class="card"><div class="row">${K.badge(r.comp)}<span class="grow"></span>${matched?'<span class="alert ok" style="padding:4px 10px;font-size:12px">✓ يطابق إعلانك</span>':'<span class="mut" style="font-size:12px">⏳ معلق</span>'}</div>
-<div style="font-weight:800;margin:4px 0">${K.esc(r.from)} ← ${K.esc(r.to)}</div>
-<div class="mut">📅 ${r.dlabel} • 💺 ${r.seats} مقاعد ${r.note?"• 📝 "+K.esc(r.note):""}${r.by?" • 👤 "+K.esc(r.by):""}</div>
-<button class="btn btn-p btn-s" style="margin-top:8px" onclick="offer('${r.id}')">قدّم عرض 📢</button></div>`}).join("")}
-function delPost(id){K.set("holPosts",K.get("holPosts",[]).filter(x=>x.id!==id));const s=K.get("holSeats",{});delete s[id];K.set("holSeats",s);renderPosts();renderReqs();K.toast("تم إلغاء الإعلان")}
-function offer(rid){const r=allReqs().find(x=>x.id===rid);if(!r)return;
-$("#pfrom").value=r.from;$("#pto").value=r.to;$("#pdate").value=r.date;$("#pseats").value=r.seats;
-$$("#pcomp .chip").forEach(c=>c.classList.toggle("on",c.dataset.c===r.comp));pcomp=r.comp;
-$("#pnote").value="عرض مطابِق لطلبك ✅";
-K.toast("تم تعبئة النموذج من الطلب — حدد السعر والوقت وانشر");window.scrollTo({top:0,behavior:"smooth"})}
-$("#ppub").onclick=()=>{const to=$("#pto").value.trim(),date=$("#pdate").value,seats=+$("#pseats").value||0,price=+$("#pprice").value||0;
-if(!to){K.toast("حدد الوجهة");return}if(!date||date<today){K.toast("اختر تاريخًا مستقبليًا");return}if(seats<1){K.toast("حدد عدد المقاعد");return}
-const d=new Date(date+"T12:00");const dl=d.toLocaleDateString("ar",{weekday:"long",day:"numeric",month:"long"});
-const dv=K.get("driver",null);
-const h={id:"hp"+Date.now(),from:$("#pfrom").value,to,date,dlabel:dl,time:$("#ptime").value,seats,free:seats,price,comp:pcomp,
-driver:K.dname(),rating:dv&&dv.verified?4.5:5.0,rc:dv&&dv.verified?8:0,trusted:!!(dv&&dv.verified),note:$("#pnote").value.trim(),mine:true};
-const p=K.get("holPosts",[]);p.unshift(h);K.set("holPosts",p);
-const m=allReqs().filter(r=>K.holMatch(h,r));
-if(m.length)K.pushHolNotif(`طلب جديد يطابق إعلانك! ${m.length} ${m.length===1?"طلب":"طلبات"}: ${h.from} ← ${h.to}`,"holiday-post.html");
-$("#pto").value="";$("#pnote").value="";
-K.toast(m.length?"تم نشر الإعلان — ووجدنا طلبات مطابقة! 🎉":"تم نشر الإعلان 📢");
-renderPosts();renderReqs();K.holBanner()};
-/* مطابقة حية عند الفتح: إعلاناتي × طلبات الركاب */
-(function(){const posts=myPosts();if(!posts.length)return;
-const hits=[];allReqs().forEach(r=>{const p=posts.find(x=>K.holMatch(x,r));if(p&&!hits.some(z=>z.r.id===r.id))hits.push({r,p})});
-const app=$("#app");
-hits.slice(0,3).forEach(({r,p})=>{const a=document.createElement("div");a.className="alert ok";a.style.marginBottom="8px";
-a.innerHTML=`<b>📩 طلب يطابق إعلانك:</b> ${K.esc(r.from)} ← ${K.esc(r.to)} — ${r.seats} مقاعد (${r.dlabel})<small>إعلانك: ${p.dlabel} — ${p.time}</small>`;app.prepend(a)})})();
-K.holBanner();renderPosts();renderReqs();
-</script></body></html>
+(function(){
+  if(!K.access())return;
+  K.page("نشر خط العطلة والمناسبات","index.html");
+  const today=KhattiCore.today();
+  let pcomp="mixed";
+  $("#pfrom").innerHTML=AREAS.map(a=>`<option>${K.esc(a)}</option>`).join("");
+  $("#pdate").min=today;
+  $("#pdate").value=today;
+
+  $("#pcomp").addEventListener("click",e=>{
+    const btn=e.target.closest(".chip");
+    if(!btn)return;
+    $$("#pcomp .chip").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    pcomp=btn.dataset.c||"mixed";
+  });
+
+  function renderLists(){
+    const posts=K.get("holPosts",[]);
+    $("#myposts").innerHTML=posts.length===0
+      ? '<div class="mut">لم تقم بنشر رحلات عطلة بعد.</div>'
+      : posts.map(p=>`<div class="card"><div class="row">${K.badge(p.comp)}<span class="grow"></span><b>${K.fmt(p.price)}</b></div><div class="route" style="font-weight:800;margin:6px 0">${K.esc(p.from)} ← ${K.esc(p.to)}</div><div class="mut">📅 ${K.esc(p.dlabel||p.date)} — 🕒 ${K.esc(p.time)} • 💺 ${p.free}/${p.seats} مقاعد</div>${p.note?`<div class="mut">📝 ${K.esc(p.note)}</div>`:""}</div>`).join("");
+
+    const reqs=(typeof REQS!=="undefined"?REQS:[]).concat(K.get("holReqs",[]));
+    $("#reqs").innerHTML=reqs.length===0
+      ? '<div class="mut">لا توجد طلبات خاصة حالياً.</div>'
+      : reqs.map(r=>`<div class="card"><div class="route"><b>${K.esc(r.from||r.area||"")} ← ${K.esc(r.to||r.dest||"")}</b></div><div class="mut">عدد الركاب: ${r.seats||r.count||1} ${r.note?`• ${K.esc(r.note)}`:""}</div></div>`).join("");
+  }
+
+  $("#ppub").onclick=function(){
+    const to=$("#pto").value.trim();
+    const date=$("#pdate").value;
+    const time=$("#ptime").value;
+    const seats=Number($("#pseats").value);
+    const price=Number($("#pprice").value);
+    if(!to){K.toast("يرجى تحديد نقطة الوصول");return;}
+    if(!KhattiCore.future(date,time)){K.toast("يرجى اختيار تاريخ ووقت مستقبلي صالح");return;}
+    if(!KhattiCore.integer(seats,1,60)){K.toast("عدد المقاعد يجب أن يكون بين 1 و 60");return;}
+    if(!KhattiCore.integer(price,0,10000000)){K.toast("سعر المقعد غير صالح");return;}
+    const post={
+      id:"hp_"+Date.now(),
+      driver:K.dname(),
+      driverName:K.dname(),
+      trusted:true,
+      from:$("#pfrom").value,
+      to:to,
+      date:date,
+      dlabel:date,
+      time:time,
+      seats:seats,
+      free:seats,
+      price:price,
+      comp:pcomp,
+      note:$("#pnote").value.trim()
+    };
+    const posts=K.get("holPosts",[]);
+    posts.unshift(post);
+    K.set("holPosts",posts);
+    K.pushHolNotif(`رحلة عطلة جديدة: ${post.from} ← ${post.to} (${post.date})`,"holiday.html");
+    K.toast("تم نشر رحلة العطلة بنجاح");
+    $("#pto").value="";
+    $("#pnote").value="";
+    renderLists();
+  };
+
+  renderLists();
+})();
+</script>
+</body></html>

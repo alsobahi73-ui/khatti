@@ -1,38 +1,104 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>لوحة السائق</title><link rel="stylesheet" href="../assets/style.css"></head>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>لوحة التحكم للسائق — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
-K.page("لوحة السائق","../index.html");
-const l=K.line(MYDRIVER.lineId);
-$("#app").innerHTML=`
-<div class="card"><div class="mut">أهلًا ${MYDRIVER.name} 👋</div>
-<div class="route" style="font-size:18px;font-weight:800;margin:6px 0">خطّي: ${l.from} ← ${l.to}</div>
-<div class="row">${K.badge(l.comp)}${K.trusted(l)}</div></div>
-<div class="stats">
-<div class="stat"><b>${l.seats-l.free}</b><span>مشترك</span></div>
-<div class="stat"><b>${K.fmt((l.seats-l.free)*l.price)}</b><span>دخل الشهر</span></div>
-<div class="stat"><b>${l.rating} ★</b><span>تقييمي (${l.rc})</span></div></div>
-<div class="card"><h3>📊 تقرير الشهر</h3>
-<div class="mut">أيام الذروة: <b>الأحد — الثلاثاء</b></div>
-<div class="mut">معدل الالتزام بالمواعيد: <b>94%</b></div>
-<div class="bar"><i style="width:94%"></i></div>
-<div class="mut" style="margin-top:6px">💡 حافظ على تقييمك فوق 4.5 لتبقى في مقدمة نتائج البحث.</div></div>
-<div class="card"><h3>🔄 التوثيق الدوري</h3>
-<div class="mut" style="font-size:13px;line-height:1.9">صورة سيلفي مطلوبة <b>كل 30 يومًا</b> للتأكد أنك صاحب الحساب الموثّق — يمنع مشاركة الحسابات.</div>
-<div class="row" style="margin-top:8px"><span class="mut">آخر توثيق:</span><b id="selfied" style="color:var(--navy)"></b></div>
-<div class="field" style="margin-top:8px"><label>التقط صورة سيلفي جديدة</label><input type="file" id="selfie" accept="image/*"></div></div>
-<div class="card"><h3>🗺️ خريطة الطلب — ركاب بانتظار خطوط</h3>
-${DEMAND.map(d=>`<div class="alert" style="margin-bottom:8px"><b>${d.n} راكبًا</b> يطلبون: ${d.route} <span class="badge ${d.comp==="girls"?"b-g":d.comp==="boys"?"b-b":"b-m"}">${COMP[d.comp]}</span><br><button class="btn btn-a btn-s" style="margin-top:6px" onclick="K.toast('فكرة ممتازة! سجّل خطًا جديدًا بهذا المسار من إدارة الخطوط')">افتح خطًا بهذا المسار</button></div>`).join("")}</div>
-<div class="card"><h3>إدارة</h3>
-<a class="btn btn-p" href="line-edit.html">⚙️ إدارة الخط (المسار، الأوقات، المقاعد، الصفة)</a>
-<a class="btn btn-a" href="board.html">🎫 تحقق صعود الركاب (PIN/QR)</a>
-<a class="btn btn-g" href="broadcast.html">📢 بث جماعي للركاب</a>
-<a class="btn btn-g" href="holiday-post.html">🎉 رحلات العطل — أعلن مقاعد شاغرة</a>
-<a class="btn btn-g" href="ratings.html">⭐ التقييمات والتعليقات (${l.comments.filter(c=>!c.r).length} بانتظار الرد)</a></div>`;
-/* §3.14.5 — توثيق دوري بالسيلفي */
-const sd=K.get("selfieDate",null);
-$("#selfied").textContent=sd?sd:"قبل 12 يومًا (تجريبي)";
-$("#selfie").onchange=e=>{if(!e.target.files[0])return;
-const d=new Date().toLocaleDateString("ar");K.set("selfieDate",d);
-$("#selfied").textContent=d;K.toast("✅ تم توثيق السيلفي — صالح لـ 30 يومًا")};
-</script></body></html>
+(function(){
+  if(!K.access())return;
+  K.page("لوحة التحكم للسائق","../index.html");
+  const l=K.line(MYDRIVER.lineId);
+  if(!l){K.missing();return;}
+
+  function render(){
+    const att=K.attendance(l.id);
+    const activeStudents=att.filter(s=>s.status!=="absent");
+    const absentStudents=att.filter(s=>s.status==="absent");
+    const clusters=KhattiCore.clusterRequests((typeof REQS!=="undefined"?REQS:[]).concat(K.get("holReqs",[])));
+    const comments=Array.isArray(l.comments)?l.comments:[];
+    const pendingReplies=comments.filter(c=>!c.r).length;
+    const occ=Math.max(0,l.seats-l.free);
+
+    $("#app").innerHTML=`
+      <div class="card">
+        <div class="mut">أهلاً بك 👋 ${K.esc(K.dname())}</div>
+        <div class="route" style="font-size:18px;font-weight:800;margin:6px 0;">المسار: ${K.esc(l.from)} ↔ ${K.esc(l.to)}</div>
+        <div class="row">${K.badge(l.comp)}${K.trusted(l)}</div>
+        <div class="stats">
+          <div class="stat"><b>${occ}/${l.seats}</b><span>المقاعد المشغولة</span></div>
+          <div class="stat"><b>${K.fmt(occ*l.price)}</b><span>الدخل الشهري المتوقع</span></div>
+          <div class="stat"><b>${absentStudents.length}</b><span>غائبون اليوم</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📋 قائمة تحضير الركاب اليوم (${KhattiCore.today()})</h3>
+        <div class="mut" style="margin-bottom:8px;">اضغط لتأكيد صعود الطالب أو وصوله ليصل إشعار فوري لولي الأمر:</div>
+        ${att.map(s=>`
+          <div class="card" style="margin-bottom:8px;padding:10px;background:${s.status==='absent'?'#fef2f2':'#f8fafc'};">
+            <div class="row">
+              <div>
+                <b>${K.esc(s.name)}</b> <span class="mut">(${K.esc(s.stop)})</span>
+                <div class="mut">الحالة: ${
+                  s.status==="absent"?"🔴 غائب اليوم (تخطَّ المحطة)":
+                  s.status==="boarded"?"🟢 صعد في الحافلة ✅":
+                  s.status==="arrived"?"🎓 وصل للجامعة بأمان":"⏳ بانتظار الصعود"
+                }</div>
+              </div>
+              <span class="grow"></span>
+              <div class="row" style="gap:4px;">
+                <button class="btn btn-p" onclick="updSt('${s.id}','boarded')" ${s.status==='absent'?'disabled':''}>صعد ✅</button>
+                <button class="btn btn-g" onclick="updSt('${s.id}','arrived')" ${s.status==='absent'?'disabled':''}>وصل 🎓</button>
+              </div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="card">
+        <h3>🔥 التجميع الذكي لطلبات المناطق الجديدة</h3>
+        ${clusters.length===0?'<div class="mut">لا توجد طلبات متجمعة حالياً.</div>':clusters.map(c=>`
+          <div class="note" style="margin-bottom:8px;">
+            <b>طلب مرتفع (${c.totalSeats} ركاب):</b> ${K.esc(c.from)} ← ${K.esc(c.to)}
+            <div class="mut">${K.esc(c.notes.join(" • "))}</div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="card">
+        <h3>🔄 التوثيق الدوري</h3>
+        <div class="mut" style="font-size:13px;line-height:1.9">صورة سيلفي مطلوبة <b>كل 30 يومًا</b> للتأكد أنك صاحب الحساب الموثّق — يمنع مشاركة الحسابات.</div>
+        <div class="row" style="margin-top:8px"><span class="mut">آخر توثيق:</span><b id="selfied" style="color:#123a5c"></b></div>
+        <div class="field" style="margin-top:8px"><label>التقط صورة سيلفي جديدة</label><input type="file" id="selfie" accept="image/*"></div>
+      </div>
+
+      <div class="card">
+        <h3>⚙️ إدارة الحساب</h3>
+        <a class="btn btn-a" href="board.html">🎫 تحقق صعود الركاب (PIN)</a>
+        <a class="btn btn-p" href="line-edit.html">⚙️ تعديل مسار الخط وأوقات الحركة</a>
+        <a class="btn btn-g" href="broadcast.html">📢 إرسال تنبيه للركاب والأهالي</a>
+        <a class="btn btn-g" href="holiday-post.html">🎉 نشر سفرة أو رحلة عطلة منفصلة</a>
+        <a class="btn btn-g" href="ratings.html">⭐ مشاهدة تقييمات المشتركين (${pendingReplies} تحتاج رد)</a>
+      </div>
+    `;
+    /* §3.14.5 — توثيق دوري بالسيلفي */
+    const sd=K.get("selfieDate",null);
+    const sdEl=document.getElementById("selfied");
+    if(sdEl)sdEl.textContent=sd?sd:"قبل 12 يومًا (تجريبي)";
+    const sfEl=document.getElementById("selfie");
+    if(sfEl)sfEl.onchange=e=>{
+      if(!e.target.files[0])return;
+      const d=new Date().toISOString().slice(0,10);
+      K.set("selfieDate",d);
+      sdEl.textContent=d;
+      K.toast("تم توثيق السيلفي ✓");
+    };
+  }
+
+  window.updSt=function(studentId,status){
+    K.setStudentStatus(l.id,studentId,status);
+    render();
+  };
+
+  render();
+})();
+</script>
+</body></html>

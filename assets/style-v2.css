@@ -34,3 +34,14 @@ header.app .bk { color:#fff; text-decoration:none; font-size:18px; padding:2px 8
 .plan-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:8px 0; }
 .plan-card { border:2px solid #e2e8f0; border-radius:10px; padding:8px; text-align:center; cursor:pointer; background:#fff; }
 .plan-card.active { border-color:#123a5c; background:#eff6ff; font-weight:800; }
+/* §3.14 — إضافات دمج ميزات اليوم */
+.qrbox{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;width:120px;margin:8px auto}
+.qrbox i{display:block;aspect-ratio:1;background:#e2e8f0;border-radius:2px}
+.qrbox i.on{background:#123a5c}
+.pinbig{font-size:28px;font-weight:800;letter-spacing:8px;text-align:center;color:#123a5c;direction:ltr}
+.langtoggle{display:flex;gap:6px;justify-content:center;margin-top:10px}
+.langtoggle button{border:1.5px solid rgba(255,255,255,.55);background:transparent;color:#fff;border-radius:20px;padding:4px 14px;font-size:13px;cursor:pointer}
+.langtoggle button.on{background:#fff;color:#123a5c;font-weight:800}
+.btn-d{background:#dc2626;color:#fff;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
+.ok-note{background:#ecfdf5;border:1.5px solid #10b981;color:#065f46;border-radius:10px;padding:8px 12px;margin:8px 0;font-size:13px}
+.danger-note{background:#fef2f2;border:1.5px solid #f87171;color:#991b1b;border-radius:10px;padding:8px 12px;margin:8px 0;font-size:13px}

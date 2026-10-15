@@ -1,37 +1,129 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تأكيد الحجز</title><link rel="stylesheet" href="../assets/style.css"></head>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>حجز مقعد — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
-K.page("تأكيد الحجز","search.html");
-const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
-let type="month",pay="cash";
-const app=$("#app");
-const TYPES={day:["🎫 مقعد يومي",l=>l.day],week:["📅 اشتراك أسبوعي",l=>l.day*6],pack10:["🎟️ دفتر 10 رحلات",l=>l.day*9],month:["🗓️ اشتراك شهري",l=>l.price],student:["🎓 شهري — خصم طلاب",l=>Math.round(l.price*0.85)]};
-function price(){return TYPES[type][1](l)}
-app.innerHTML=`
-<div class="card"><div class="row">${K.badge(l.comp)}</div>
-<div class="route" style="font-size:18px;font-weight:800;margin:6px 0">${l.from} ← ${l.to}</div>
-<div class="mut">${l.driver} • ذهاب ${l.go} / إياب ${l.back}</div></div>
-<div class="card"><h3>نوع الحجز</h3>
-<label class="radio" data-t="day"><input type="radio" name="t"> 🎫 مقعد يومي — ${K.fmt(l.day)}</label>
-<label class="radio" data-t="week"><input type="radio" name="t"> 📅 اشتراك أسبوعي — ${K.fmt(l.day*6)}</label>
-<label class="radio" data-t="pack10"><input type="radio" name="t"> 🎟️ دفتر 10 رحلات — ${K.fmt(l.day*9)} <span class="mut">(ادفع 9 واحصل على 10)</span></label>
-<label class="radio on" data-t="month"><input type="radio" name="t" checked> 🗓️ اشتراك شهري — ${K.fmt(l.price)}</label>
-<label class="radio" data-t="student"><input type="radio" name="t"> 🎓 شهري — خصم طلاب 15% — ${K.fmt(Math.round(l.price*0.85))}</label>
-<div class="field" style="margin-top:10px"><label>الاسم</label><input id="nm" value="${K.pname()}"></div>
-<div class="field"><label>رقم الهاتف</label><input id="ph" value="${K.pphone()}" dir="ltr" style="text-align:right"></div></div>
-<div class="card"><h3>طريقة الدفع</h3>
-<label class="radio on" data-p="cash"><input type="radio" name="p" checked> 💵 كاش — أدفع للسائق مباشرة</label>
-<label class="radio" data-p="zain"><input type="radio" name="p"> 📱 Zain Cash — دفع مسبق (سيصلك رقم المحفظة بعد التأكيد)</label>
-<label class="radio" data-p="asia"><input type="radio" name="p"> 🏦 آسيا حوالة — دفع مسبق (سيصلك رقم الحساب بعد التأكيد)</label>
-<div class="note" style="margin-top:10px">يستطيع الأهل دفع اشتراك الأبناء من حساباتهم مباشرة.</div></div>
-<div class="card"><div class="row"><span class="mut">الإجمالي</span><b class="grow" style="text-align:left;font-size:20px;color:var(--navy)" id="tot">${K.fmt(price())}</b></div>
-<button class="btn btn-a" id="ok">تأكيد الحجز ✓</button></div>`;
-$$(".radio[data-t]").forEach(r=>r.onclick=()=>{$$(".radio[data-t]").forEach(x=>x.classList.remove("on"));r.classList.add("on");type=r.dataset.t;$("#tot").textContent=K.fmt(price())});
-$$(".radio[data-p]").forEach(r=>r.onclick=()=>{$$(".radio[data-p]").forEach(x=>x.classList.remove("on"));r.classList.add("on");pay=r.dataset.p});
-$("#ok").onclick=()=>{const b=K.get("bookings",[]);const pin=String(Math.floor(1000+Math.random()*9000));
-const nb={id:"b"+Date.now(),lineId:id,when:"اليوم — "+l.go,type:TYPES[type][0],pay:{cash:"كاش",zain:"Zain Cash",asia:"آسيا حوالة"}[pay],status:"upcoming",pin:pin};
-b.unshift(nb);K.set("bookings",b);
-const trips=K.get("trips",[]);trips.unshift({id:nb.id,lineId:id,when:"اليوم — "+l.go,status:"upcoming",rated:false,pin:pin});K.set("trips",trips);
-K.toast("تم الحجز بنجاح ✓ — رمز صعودك: "+pin.split("").join(" "));setTimeout(()=>location.href="trips.html",1600)};
-</script></body></html>
+(function(){
+  if(!K.access())return;
+  const id=new URLSearchParams(location.search).get("id")||"l1";
+  const l=K.line(id);
+  K.page("حجز مقعد واشتراك","search.html");
+  if(!l){K.missing();return;}
+
+  let selectedPlan={id:"full",label:"شهري كامل (5 أيام)",mult:1};
+  let selectedSeats=["مقعد 3"];
+
+  const totalSeats=Math.min(14,Math.max(4,Number(l.seats)||14));
+  const takenCount=Math.max(0,totalSeats-Number(l.free));
+  const dayPrice=l.day||Math.round(l.price/26);
+
+  $("#app").innerHTML=`
+    <div class="card">
+      <div class="route" style="font-size:17px;font-weight:800;">${K.esc(l.from)} ← ${K.esc(l.to)}</div>
+      <div class="mut">السائق: ${K.esc(l.driver||l.driverName||"")} • السعر الأساسي: ${K.fmt(l.price)}/شهر</div>
+    </div>
+
+    <div class="card">
+      <h3>1️⃣ اختر باقة الاشتراك</h3>
+      <div class="plan-cards" id="plans">
+        <div class="plan-card active" data-id="full" data-mult="1"><b>دوام كامل</b><div class="mut">5 أيام/أسبوع</div><div style="color:#123a5c;font-weight:800;">${K.fmt(l.price)}</div></div>
+        <div class="plan-card" data-id="hybrid" data-mult="0.65"><b>دوام مدمج</b><div class="mut">3 أيام/أسبوع</div><div style="color:#123a5c;font-weight:800;">${K.fmt(Math.round(l.price*0.65))}</div></div>
+        <div class="plan-card" data-id="weekly" data-mult="0.3"><b>باقة أسبوعية</b><div class="mut">تجريبية</div><div style="color:#123a5c;font-weight:800;">${K.fmt(Math.round(l.price*0.3))}</div></div>
+        <div class="plan-card" data-id="pack10" data-mult="${(dayPrice*9/l.price).toFixed(3)}"><b>🎟️ دفتر 10 رحلات</b><div class="mut">ادفع 9 واحصل على 10</div><div style="color:#123a5c;font-weight:800;">${K.fmt(dayPrice*9)}</div></div>
+        <div class="plan-card" data-id="student" data-mult="0.85"><b>🎓 شهري — خصم طلاب 15%</b><div class="mut">للطلبة</div><div style="color:#123a5c;font-weight:800;">${K.fmt(Math.round(l.price*0.85))}</div></div>
+      </div>
+
+      <h3 style="margin-top:14px;">2️⃣ اختر مقعدك المفضل من المخطط</h3>
+      <div class="seat-map">
+        <div class="seat-grid" id="seat-grid"></div>
+      </div>
+
+      <div class="row" style="gap:8px;">
+        <div class="field grow"><label>نقطة الصعود</label><select id="pickup">${(Array.isArray(l.pickups)&&l.pickups.length?l.pickups:[l.from,"الساحة العامة"]).map(p=>`<option>${K.esc(p)}</option>`).join("")}</select></div>
+        <div class="field grow"><label>شفت العودة المفضل</label><select id="return-shift"><option value="14:30">الوجبة الأولى (02:30 م)</option><option value="16:00">الوجبة الثانية (04:00 م)</option></select></div>
+      </div>
+
+      <div class="field"><label>رقم الهاتف للتأكيد</label><input id="ph" type="tel" value="${K.esc((K.get('me',{})||{}).phone||'07700000000')}"></div>
+      <div class="field"><label>عدد المقاعد</label><select id="unit_count"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+
+      <div class="note" id="price-summary" style="margin:10px 0;font-weight:700;"></div>
+      <button class="btn btn-p" id="ok" style="width:100%;">تأكيد الحجز وإصدار بطاقة الصعود ✓</button>
+    </div>
+  `;
+
+  function renderSeats(){
+    const grid=$("#seat-grid");
+    let html=`<div class="seat-btn driver-seat">🚘 السائق</div><div></div>`;
+    for(let i=1;i<=totalSeats;i++){
+      const name="مقعد "+i;
+      const isTaken=i<=takenCount;
+      const isSel=selectedSeats.includes(name);
+      html+=`<button type="button" class="seat-btn ${isTaken?'taken':(isSel?'selected':'')}" data-seat="${name}" ${isTaken?'disabled':''}>💺 ${name}</button>`;
+    }
+    grid.innerHTML=html;
+    updateSummary();
+  }
+
+  function updateSummary(){
+    const count=Math.max(1,selectedSeats.length||Number($("#unit_count").value)||1);
+    const total=Math.round(l.price*selectedPlan.mult*count);
+    $("#price-summary").textContent=`الباقة: ${selectedPlan.label} | المقاعد: ${selectedSeats.join("، ")||count} | الإجمالي: ${K.fmt(total)}`;
+  }
+
+  $("#seat-grid").addEventListener("click",e=>{
+    const btn=e.target.closest(".seat-btn");
+    if(!btn||btn.classList.contains("taken")||btn.classList.contains("driver-seat"))return;
+    const s=btn.dataset.seat;
+    if(selectedSeats.includes(s)){
+      if(selectedSeats.length>1)selectedSeats=selectedSeats.filter(x=>x!==s);
+    }else{
+      selectedSeats.push(s);
+    }
+    $("#unit_count").value=String(Math.min(3,selectedSeats.length));
+    renderSeats();
+  });
+
+  $("#unit_count").onchange=function(){
+    const c=Number(this.value)||1;
+    selectedSeats=[];
+    for(let i=takenCount+1;i<=totalSeats&&selectedSeats.length<c;i++)selectedSeats.push("مقعد "+i);
+    renderSeats();
+  };
+
+  $("#plans").addEventListener("click",e=>{
+    const card=e.target.closest(".plan-card");
+    if(!card)return;
+    $$("#plans .plan-card").forEach(c=>c.classList.remove("active"));
+    card.classList.add("active");
+    selectedPlan={id:card.dataset.id,label:card.querySelector("b").textContent,mult:Number(card.dataset.mult)||1};
+    updateSummary();
+  });
+
+  $("#ok").onclick=function(){
+    const ph=$("#ph").value.trim();
+    if(!KhattiCore.phone(ph)){K.toast("يرجى إدخال رقم هاتف عراقي صحيح");return;}
+    const bookings=K.get("bookings",[]);
+    const trips=K.get("trips",[]);
+    const newId="bk_"+Date.now();
+    const pin=String(Math.floor(1000+Math.random()*9000)); /* §3.14.1 — رمز صعود */
+    const when=`${l.go||"07:00"} — عودة ${$("#return-shift").value} (${selectedPlan.label})`;
+    const entry={
+      id:newId,
+      lineId:l.id,
+      when,
+      status:"upcoming",
+      pin:pin,
+      seats:selectedSeats,
+      plan:selectedPlan.label,
+      pickup:$("#pickup").value,
+      returnShift:$("#return-shift").value,
+      phone:ph
+    };
+    K.commit({bookings:[entry,...bookings],trips:[entry,...trips]});
+    K.toast("تم الحجز بنجاح ✓ — رمز صعودك: "+pin.split("").join(" "));
+    setTimeout(()=>location.href="trips.html",1600);
+  };
+
+  renderSeats();
+})();
+</script>
+</body></html>

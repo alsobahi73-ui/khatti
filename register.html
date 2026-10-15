@@ -1,10 +1,11 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تسجيل حساب</title><link rel="stylesheet" href="assets/style.css"></head>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تسجيل حساب — خطّي</title><link rel="stylesheet" href="assets/style.css"><link rel="stylesheet" href="assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="assets/data.js"></script><script src="assets/app.js"></script>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
 <script>
 K.page("تسجيل حساب","index.html");
 const app=$("#app");
-const role0=new URLSearchParams(location.search).get("role");
+const qs=new URLSearchParams(location.search);
+const role0=qs.get("role"), nextUrl=qs.get("next")||"";
 const me=K.get("me",null),dv=K.get("driver",null);
 let role=role0||"",codeSent=false,codeOk=false,vcodeSent=false,vcodeOk=false;
 let pN=K.get("draft_pN",""),pP=K.get("draft_pP",""),dN=K.get("draft_dN",""),dP=K.get("draft_dP","");
@@ -23,7 +24,7 @@ else{app.innerHTML=`
 <button class="btn ${role==="driver"?"btn-p":"btn-g"}" style="margin-top:0" onclick="pick('driver')">🚌 سائق</button>
 </div></div><div id="form"></div>`;
 if(role)renderForm()}
-function pick(r){role=r;codeSent=codeOk=vcodeSent=vcodeOk=false;history.replaceState(null,"","register.html?role="+r);
+function pick(r){role=r;codeSent=codeOk=vcodeSent=vcodeOk=false;history.replaceState(null,"","register.html?role="+r+(nextUrl?"&next="+encodeURIComponent(nextUrl):""));
 $$("#app .row .btn").forEach((b,i)=>{b.className="btn "+((i===0)===(r==="passenger")?"btn-p":"btn-g");b.style.marginTop="0"});renderForm()}
 function codeBox(pref){return `<div id="${pref}codebox" style="display:${codeSent||vcodeSent?"block":"none"}">
 <div class="ok-note">📱 تم إرسال رمز التحقق (تجريبي: <b>أي رمز من 4 أرقام</b> يُقبل).</div>
@@ -40,8 +41,8 @@ if(role==="passenger"){f.innerHTML=`
 <div class="field"><label>رمز الدعوة (اختياري)</label><input id="ccode" placeholder="يرسله الابن من حسابه" dir="ltr" style="text-align:right"></div>
 <button class="btn btn-a" id="pdone">إتمام التسجيل ✓</button></div></div>`;
 $("#psend").onclick=()=>{pN=$("#pname").value;pP=$("#pphone").value;
-if(!pN.trim()){K.toast("أدخل الاسم");return}
-if(!/^07\d{9}$/.test(pP.trim())){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return}
+if(!KhattiCore.name(pN)){K.toast("أدخل الاسم");return}
+if(!KhattiCore.phone(pP)){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return}
 K.set("draft_pN",pN);K.set("draft_pP",pP);
 codeSent=true;renderForm();K.toast("تم إرسال الرمز 📲")};
 const pv=$("#pverify");if(pv)pv.onclick=()=>{if(!/^\d{4}$/.test($("#pcode").value.trim())){K.toast("الرمز 4 أرقام (تجريبي: أي 4 أرقام)");return}
@@ -49,7 +50,7 @@ codeOk=true;renderForm();K.toast("تم التحقق ✓")};
 const pd=$("#pdone");if(pd)pd.onclick=()=>{const kids=[];
 if($("#cname").value.trim())kids.push({name:$("#cname").value.trim(),code:$("#ccode").value.trim()});
 K.set("me",{name:$("#pname").value.trim(),phone:$("#pphone").value.trim(),role:"passenger",children:kids});
-K.toast("أهلًا "+$("#pname").value.trim()+" 🎉");setTimeout(()=>location.href="passenger/search.html",900)}}
+K.toast("أهلًا "+$("#pname").value.trim()+" 🎉");setTimeout(()=>location.href=nextUrl||"passenger/search.html",900)}}
 else if(role==="driver"){f.innerHTML=`
 <div class="card"><h3>🚌 تسجيل سائق — توثيق مشدد</h3>
 <div class="field"><label>الاسم الكامل</label><input id="dname" placeholder="مثال: ستار جبار" value="${K.esc(dN)}"></div>
@@ -66,8 +67,8 @@ else if(role==="driver"){f.innerHTML=`
 <div class="danger-note">⚠️ لن تُنشر خطوطك أو إعلاناتك حتى تُراجَع بياناتك وتُقبَل — حماية للركاب.</div>`;
 $("#vlic").onchange=e=>{if(e.target.files[0])$("#licname").textContent="✓ تم اختيار: "+e.target.files[0].name+" (محاكاة رفع)"};
 $("#dsend").onclick=()=>{dN=$("#dname").value;dP=$("#dphone").value;
-if(!dN.trim()){K.toast("أدخل الاسم");return}
-if(!/^07\d{9}$/.test(dP.trim())){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return}
+if(!KhattiCore.name(dN)){K.toast("أدخل الاسم");return}
+if(!KhattiCore.phone(dP)){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return}
 K.set("draft_dN",dN);K.set("draft_dP",dP);
 vcodeSent=true;renderForm();K.toast("تم إرسال الرمز 📲")};
 const vv=$("#vverify");if(vv)vv.onclick=()=>{if(!/^\d{4}$/.test($("#vcode").value.trim())){K.toast("الرمز 4 أرقام (تجريبي: أي 4 أرقام)");return}

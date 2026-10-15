@@ -1,32 +1,50 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>التقييمات والتعليقات</title><link rel="stylesheet" href="../assets/style.css"></head>
-<body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>تقييمات وآراء المشتركين — خطي</title><link rel="stylesheet" href="../assets/style.css"></head>
+<body><div class="wrap"><main id="app">
+<div class="card"><h3>⭐ تقييمات وآراء المشتركين</h3>
+<div id="ratings-list"></div>
+</div>
+</main></div>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
-K.page("التقييمات والتعليقات","index.html");
-const l=K.line(MYDRIVER.lineId);let tab="me";const mine=K.get("myComments",{});
-const dist=[["5 ★",70],["4 ★",20],["3 ★",7],["2 ★",2],["1 ★",1]];
-function render(){
-$("#app").innerHTML=`
-<div class="tabs"><div class="tab ${tab==="me"?"on":""}" data-t="me">تقييمي</div><div class="tab ${tab==="px"?"on":""}" data-t="px">قيّم ركابك</div><div class="tab ${tab==="cm"?"on":""}" data-t="cm">التعليقات</div></div>
-<div id="body"></div>`;
-$$(".tab").forEach(t=>t.onclick=()=>{tab=t.dataset.t;render()});
-const b=$("#body");
-if(tab==="me"){b.innerHTML=`<div class="card" style="text-align:center"><div style="font-size:44px;font-weight:800;color:var(--navy)">${l.rating}</div>${K.stars(l.rating)}<div class="mut">${l.rc} تقييمًا</div>
-${dist.map(d=>`<div class="row" style="margin-top:6px"><span style="font-size:12px;width:36px">${d[0]}</span><div class="bar grow"><i style="width:${d[1]}%"></i></div></div>`).join("")}
-<div class="note" style="margin-top:10px">تقييمك العلني يؤثر على <b>ترتيبك في نتائج البحث</b> وشارة «سائق موثوق».</div></div>`}
-if(tab==="px"){b.innerHTML=`<div class="note">تقييمك للراكب <b>خاص بالسائقين فقط</b> — يظهر عند طلبات الحجز الجديدة.</div>`+PASSENGERS.map((p,i)=>`
-<div class="card"><b>${p.n}</b><div class="starpick" data-i="${i}">${[1,2,3,4,5].map(s=>`<span data-s="${s}" class="${s<=p.s?"on":""}">★</span>`).join("")}</div>
-<div class="chips">${PX_TAGS.map(g=>`<button class="chip ${p.tags.includes(g)?"on":""}" data-p="${i}" data-g="${g}">${g}</button>`).join("")}</div>
-<button class="btn btn-g btn-s" data-save="${i}">حفظ التقييم</button></div>`).join("");
-$$(".starpick span").forEach(s=>s.onclick=()=>{const box=s.parentElement;box.querySelectorAll("span").forEach(x=>x.classList.toggle("on",+x.dataset.s<=+s.dataset.s))});
-$$(".chip[data-p]").forEach(c=>c.onclick=()=>c.classList.toggle("on"));
-$$("[data-save]").forEach(btn=>btn.onclick=()=>K.toast("تم حفظ تقييم الراكب ✓"))}
-if(tab==="cm"){const pend=l.comments.filter(c=>!c.r&&!mine[l.id+":"+l.comments.indexOf(c)]).length;
-b.innerHTML=`<div class="note">لديك <b>${pend}</b> تعليق بانتظار ردك — الرد العلني يبني ثقة الركاب الجدد.</div>`+l.comments.map((c,i)=>{const mr=c.r||mine[l.id+":"+i];
-return `<div class="card"><div class="cmt"><div class="who">${K.esc(c.n)} <span>• راكب موثّق • ${c.d}</span></div><div>${K.esc(c.t)}</div>
-${mr?`<div class="reply"><b>ردك:</b> ${K.esc(mr)}</div>`:`<div class="field" style="margin-top:8px"><textarea id="rp${i}" placeholder="اكتب ردك العلني…"></textarea></div><button class="btn btn-p btn-s" data-rp="${i}">نشر الرد</button> <button class="btn btn-g btn-s" onclick="K.toast('تم إرسال الطعن للإدارة — سيُراجع خلال ٢٤ ساعة')">طعن لدى الإدارة</button>`}</div></div>`}).join("");
-$$("[data-rp]").forEach(btn=>btn.onclick=()=>{const i=btn.dataset.rp,v=$("#rp"+i).value.trim();if(!v){K.toast("اكتب الرد أولًا");return}
-const m=K.get("myComments",{});m[l.id+":"+i]=v;K.set("myComments",m);K.toast("تم نشر ردك ✓");render()})}
-}
-render();
-</script></body></html>
+(function(){
+  if(!K.access())return;
+  K.page("تقييمات وآراء المشتركين","index.html");
+  function render(){
+    const l=K.line(MYDRIVER.lineId);
+    if(!l||!Array.isArray(l.comments)||l.comments.length===0){
+      $("#ratings-list").innerHTML='<div class="mut">لا توجد تقييمات حتى الآن.</div>';
+      return;
+    }
+    $("#ratings-list").innerHTML=l.comments.map((c,i)=>`
+      <div class="card" style="margin-bottom:10px;">
+        <div><strong>${K.esc(c.u)}</strong> — <span style="color:#f59e0b;">${'★'.repeat(Math.max(1,Math.min(5,Number(c.s)||5)))}</span></div>
+        <p style="margin:4px 0;">"${K.esc(c.t)}"</p>
+        ${c.r ? `<div class="note" style="margin-top:6px;background:#f0fdf4;"><strong>ردك:</strong> ${K.esc(c.r)}</div>` : `
+          <div style="margin-top:6px;">
+            <input id="reply-${i}" placeholder="اكتب ردك على هذا التقييم..." style="width:70%;display:inline-block;padding:6px;">
+            <button class="btn btn-p" onclick="sendReply(${i})" style="width:25%;display:inline-block;">رد</button>
+          </div>
+        `}
+      </div>
+    `).join("");
+  }
+
+  window.sendReply=function(idx){
+    const l=K.line(MYDRIVER.lineId);
+    const input=$(`#reply-${idx}`);
+    const replyText=input?input.value.trim():"";
+    if(!replyText){K.toast("يرجى كتابة الرد أولاً");return;}
+    const comments=Array.isArray(l.comments)?[...l.comments]:[];
+    if(!comments[idx])return;
+    comments[idx]={...comments[idx],r:replyText};
+    const allComments=K.get("myComments",{});
+    allComments[l.id]=comments;
+    K.set("myComments",allComments);
+    K.toast("تم إرسال الرد بنجاح");
+    render();
+  };
+
+  render();
+})();
+</script>
+</body></html>

@@ -1,52 +1,38 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>بحث عن خط</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
-<body><div class="wrap"><main id="app">
-<div class="tabs"><span class="tab on">🚌 خطوط دائمة</span><a class="tab" href="holiday.html" style="text-decoration:none;color:inherit">🎉 رحلات العطل</a></div>
-<div class="card"><h3>🔍 ابحث عن خط</h3>
-<div class="field"><label for="gov">المحافظة</label><select id="gov" aria-controls="area"></select></div>
-<div class="field"><label for="area">المدينة / المنطقة</label><select id="area"><option value="">كل المدن والمناطق</option></select><div class="mut" id="cities-status" role="status" aria-live="polite"></div></div>
-<div class="field"><label>الجهة (جامعة / دائرة)</label><select id="uni"><option value="">كل الجهات</option></select></div>
-<div class="chips" id="fcomp">
-<button class="chip on" data-c="">الكل</button><button class="chip" data-c="girls">بنات فقط</button><button class="chip" data-c="boys">شباب فقط</button><button class="chip" data-c="mixed">مختلط</button>
-</div>
-<button class="btn btn-p" id="go">ابحث</button>
-<button class="btn btn-g" id="pinmode">📍 بحث بالدبوس — ضع دبوس بيتك على الخريطة</button>
-</div>
-<div class="card" id="pinbox" style="display:none"><h3>ضع دبوس بيتك</h3><div class="mapbox" id="pmap"></div><div class="mut" style="margin-top:6px">اضغط على الخريطة لتحديد موقعك — ستُرتّب الخطوط حسب القرب منك.</div></div>
-<div id="results"></div>
-<div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">احفظ طلبك وسنُشعرك فور توفر خط يطابقك — صلاحية الطلب 30 يومًا.</p><button class="btn btn-a" id="notifybtn">🔔 أعلمني عند التوفر</button></div>
-</main></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/locations.js"></script><script src="../assets/app.js"></script>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>البحث عن خط — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
+<body><div class="wrap"><main id="app"></main></div>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
-K.page("بحث عن خط","../index.html");
-const area=$("#area"),uni=$("#uni");
-const governorate=document.getElementById('gov');
-KhattiLocations.forEach(g=>governorate.add(new Option(g.name,g.name)));
-function selectedLocation(){return KhattiLocations.find(g=>g.name===governorate.value)||KhattiLocations[0]}
-function updateCities(){const region=selectedLocation();area.replaceChildren(new Option('كل المدن والمناطق',''));region.cities.forEach(city=>area.add(new Option(city,city)));document.getElementById('cities-status').textContent='مدن ومناطق رئيسية في '+region.name}
-updateCities();
-UNIS.forEach(u=>uni.insertAdjacentHTML("beforeend",`<option>${u}</option>`));
-let fc="",pin=null,pmap=null,pinMk=null;
-$("#fcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#fcomp .chip").forEach(c=>c.classList.remove("on"));b.classList.add("on");fc=b.dataset.c;doSearch()});
-$("#go").onclick=doSearch;$("#gov").onchange=()=>{updateCities();uni.value='';pin=null;if(pinMk){pinMk.remove();pinMk=null}if(pmap)pmap.setView(selectedLocation().center,11);doSearch()};
-area.onchange=doSearch;uni.onchange=doSearch;
-function doSearch(){
- const g=$("#gov").value;const box=$("#results"),nt=$("#notify");box.innerHTML="";
- if(g!=="بغداد"){nt.style.display="block";return}
- let ls=LINES.map(l=>K.line(l.id));
- if(area.value)ls=ls.filter(l=>l.from===area.value);
- if(uni.value)ls=ls.filter(l=>l.to===uni.value);
- if(fc)ls=ls.filter(l=>l.comp===fc);
- if(pin){ls=ls.map(l=>({...l,_d:K.dist(pin,l.route[0])})).sort((a,b)=>a._d-b._d);
-  box.innerHTML='<div class="note">📍 مرتبة حسب القرب من دبوسك'+(ls[0]?` — أقرب خط على بعد ${ls[0]._d.toFixed(1)} كم`:"")+'</div>'}
- if(!ls.length){nt.style.display="block";return}
- nt.style.display="none";
- ls.sort((a,b)=>(b.trusted-a.trusted)||(b.rating-a.rating));
- box.innerHTML=ls.map(l=>K.lineCard(l)).join("");
-}
-$("#pinmode").onclick=()=>{const b=$("#pinbox");b.style.display=b.style.display==="none"?"block":"none";
- if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",selectedLocation().center,11);
-  if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}};
-$("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:$("#gov").value,area:area.value,uni:uni.value,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("تم حفظ طلبك — سنُشعرك عند توفر خط مطابق 🔔")};
-doSearch();
+(function(){
+  /* §3.12 — بوابة التسجيل: إعلانات الخطوط مخفية حتى تسجيل حساب راكب */
+  const me=K.get("me",null);
+  K.page("البحث عن الخطوط","../index.html");
+  K.holBanner();
+  if(!me){
+    $("#app").insertAdjacentHTML("beforeend",`
+      <div class="card" style="text-align:center;padding:30px 14px">
+        <div style="font-size:48px">🔒</div>
+        <h3>سجّل حساب راكب لرؤية الخطوط</h3>
+        <p class="mut">إعلانات الخطوط لا تظهر إلا للمسجلين — سجّل مجانًا خلال دقيقة.</p>
+        <a class="btn btn-p" href="../register.html?role=passenger">سجّل كراكب ←</a>
+      </div>`);
+    return;
+  }
+  $("#app").insertAdjacentHTML("beforeend",`
+    <div class="card">
+      <div class="row" style="gap:8px;flex-wrap:wrap;">
+        <div class="field grow"><label>من منطقة</label><select id="sfrom"><option value="">الكل</option>${AREAS.map(a=>`<option>${K.esc(a)}</option>`).join("")}</select></div>
+        <div class="field grow"><label>إلى وجهة</label><select id="sto"><option value="">الكل</option>${AREAS.map(a=>`<option>${K.esc(a)}</option>`).join("")}</select></div>
+      </div>
+    </div>
+    <div id="list"></div>
+  `);
+  function render(){
+    const f=$("#sfrom").value, t=$("#sto").value;
+    const items=LINES.map(x=>K.line(x.id)).filter(l=>l&&(!f||l.from.includes(f))&&(!t||l.to.includes(t)));
+    $("#list").innerHTML=items.length?items.map(l=>K.lineCard(l)).join(""):'<div class="mut">لا توجد خطوط مطابقة.</div>';
+  }
+  $("#sfrom").onchange=render;
+  $("#sto").onchange=render;
+  render();
+})();
 </script></body></html>

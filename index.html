@@ -1,47 +1,54 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#123a5c"><link rel="manifest" href="manifest.json"><title>خطّي — Khatti</title><link rel="stylesheet" href="assets/style.css"></head>
-<body><div class="wrap">
-<div class="hero"><h1 id="t-brand">خَطّي</h1><p id="t-hero">نظّم خطّك — احجز مقعدك — اطمئن على أهلك<br>منصة خطوط النقل للطلبة والموظفين في كل العراق</p><div style="margin-top:8px"><span class="trusted" style="border-color:#e09a12" id="t-sim">🎮 محاكاة واقعية تفاعلية</span></div><p style="font-size:.85rem;opacity:.85;margin-top:6px" id="t-try">جرّب التطبيق كاملًا ببيانات تجريبية — رأيك يصنع النسخة الحقيقية</p>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>خطي — منصة الخطوط العراقية</title><link rel="stylesheet" href="assets/style.css"><link rel="stylesheet" href="assets/style-v2.css"></head>
+<body><div class="wrap"><header class="topbar"><a class="brand" href="index.html">🚌 <span id="t-brand">خطي</span></a><nav><a href="register.html?role=passenger" id="t-navpx">دخول الركاب</a><a href="register.html?role=driver" id="t-navdr">حساب السائق</a><a href="parent/index.html" id="t-navpar">ولي الأمر</a><a href="support.html" id="t-navsup">الدعم</a></nav></header>
+<main id="app">
+<div class="hero"><h1 id="t-heroh">خطي</h1><p id="t-herop">منصة الخطوط المباشرة — حافلات وسيارات خطية<br>اشتراك شهري مرن • تتبع حي للأهالي • خطوط عطل سريعة</p>
 <div class="langtoggle"><button id="lang-ar" class="on">عربي</button><button id="lang-ku">کوردی</button></div></div>
-<main>
-<a class="rolecard" href="register.html" id="rc-reg" style="border:1.5px solid var(--amber)"><span class="ic">📝</span><span><b id="t-reg">سجّل حسابًا جديدًا</b><small id="t-regs">راكب أو سائق — التسجيل إلزامي قبل استخدام التطبيق</small></span><span class="go">←</span></a>
-<a class="rolecard" href="passenger/search.html"><span class="ic">🧑‍🎓</span><span><b id="t-px">أنا راكب</b><small id="t-pxs">ابحث عن خط، احجز مقعدًا، تتبع الباص لحظيًا</small></span><span class="go">←</span></a>
-<a class="rolecard" href="driver/index.html"><span class="ic">🚌</span><span><b id="t-dr">أنا سائق</b><small id="t-drs">أدر خطك ومشتركيك وتقييماتك وتقارير دخلك</small></span><span class="go">←</span></a>
-<a class="rolecard" href="parent/index.html"><span class="ic">👨‍👩‍👧</span><span><b id="t-par">رابط الأهل</b><small id="t-pars">تابع رحلة ابنك لحظيًا — يعمل من المتصفح بلا تثبيت</small></span><span class="go">←</span></a>
-<a class="rolecard" href="support.html"><span class="ic">💬</span><span><b id="t-sup">الدعم والتواصل</b><small id="t-sups">أسئلة شائعة — راسل فريق خطّي مباشرة</small></span><span class="go">←</span></a>
-<div class="card"><h3 id="t-how">كيف يعمل؟</h3><div class="steps">
-<div class="step"><b>1</b><span id="t-s1">سجّل خطك أو ابحث عن خط</span></div>
-<div class="step"><b>2</b><span id="t-s2">احجز وتتبع لحظيًا</span></div>
-<div class="step"><b>3</b><span id="t-s3">قيّم وبلّغ عن المخالفات</span></div>
-</div></div>
-<div class="note" id="t-safe">💡 <b>الأمان أولًا:</b> منصة مخالفات موثقة + تقييم أعمى + تتبع يعمل فقط أثناء الرحلة + شارة «سائق موثوق».</div>
-</main><footer class="app" id="t-foot">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
+
+<div class="card" id="gate-card" style="border:2px solid #123a5c;text-align:center;padding:22px 14px;">
+  <div style="font-size:40px">🔒</div>
+  <h3 id="t-gate">سجّل حساب راكب لرؤية الخطوط</h3>
+  <p class="mut" id="t-gates">إعلانات الخطوط لا تظهر إلا للمسجلين — سجّل مجانًا خلال دقيقة.</p>
+  <a class="btn btn-p" id="t-gatebtn" href="register.html?role=passenger">سجّل كراكب ←</a>
 </div>
-<script src="assets/data.js"></script><script src="assets/app.js"></script>
+
+<div class="grid3" style="margin-top:14px;">
+  <div class="card clickable" onclick="location.href='register.html?role=passenger'"><h3 id="t-pxt">👥 ركاب وطلبة</h3><p id="t-pxs">اشترك بخط شهري أو مدمج (3 أيام)، اختر مقعدك بصرياً، وفعّل زر «أنا غائب اليوم».</p><button class="btn btn-p" id="t-pxb">دخول الركاب</button></div>
+  <div class="card clickable" onclick="location.href='register.html?role=driver'"><h3 id="t-drt">🚘 سائقو الخطوط</h3><p id="t-drs">إدارة حضور الركاب اليومي (صعد/وصل)، استعراض الطلبات المجمعة، ونشر رحلات العطل.</p><button class="btn btn-a" id="t-drb">لوحة السائقين</button></div>
+  <div class="card clickable" onclick="location.href='parent/index.html'"><h3 id="t-part">👨‍👩‍👧 بوابة أولياء الأمور</h3><p id="t-pars">اربط حسابك بكود الطالب الخاص وتابع صعود ابنك وموقع الحافلة وتنبيه الـ 5 دقائق.</p><button class="btn btn-g" id="t-parb">متابعة الأبناء</button></div>
+</div>
+</main></div>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
 <script>
-/* §3.14.3 — مبدّل اللغة عربي/كردي (سوراني) */
-function applyLang(){const ku=K.get("lang","ar")==="ku",d=K.dict;
-const t=(id,arV,kuV)=>{const e=document.getElementById(id);if(e)e.innerHTML=ku?kuV:arV};
-const AR={brand:"خَطّي",hero:"نظّم خطّك — احجز مقعدك — اطمئن على أهلك<br>منصة خطوط النقل للطلبة والموظفين في كل العراق",sim:"🎮 محاكاة واقعية تفاعلية",try:"جرّب التطبيق كاملًا ببيانات تجريبية — رأيك يصنع النسخة الحقيقية",reg:"سجّل حسابًا جديدًا",regs:"راكب أو سائق — التسجيل إلزامي قبل استخدام التطبيق",px:"أنا راكب",pxs:"ابحث عن خط، احجز مقعدًا، تتبع الباص لحظيًا",dr:"أنا سائق",drs:"أدر خطك ومشتركيك وتقييماتك وتقارير دخلك",par:"رابط الأهل",pars:"تابع رحلة ابنك لحظيًا — يعمل من المتصفح بلا تثبيت",sup:"الدعم والتواصل",sups:"أسئلة شائعة — راسل فريق خطّي مباشرة",how:"كيف يعمل؟",s1:"سجّل خطك أو ابحث عن خط",s2:"احجز وتتبع لحظيًا",s3:"قيّم وبلّغ عن المخالفات",safe:"💡 <b>الأمان أولًا:</b> منصة مخالفات موثقة + تقييم أعمى + تتبع يعمل فقط أثناء الرحلة + شارة «سائق موثوق».",foot:"خطّي — نموذج أولي • صُنع في العراق 🇮🇶"};
-t("t-brand",AR.brand,d.brand);t("t-hero",AR.hero,d.heroSub);t("t-sim",AR.sim,d.simBadge);t("t-try",AR.try,d.tryNote);
-t("t-reg",AR.reg,d.reg);t("t-regs",AR.regs,d.regSub);t("t-px",AR.px,d.px);t("t-pxs",AR.pxs,d.pxSub);
-t("t-dr",AR.dr,d.dr);t("t-drs",AR.drs,d.drSub);t("t-par",AR.par,d.par);t("t-pars",AR.pars,d.parSub);
-t("t-sup",AR.sup,d.sup);t("t-sups",AR.sups,d.supSub);t("t-how",AR.how,d.how);
-t("t-s1",AR.s1,d.s1);t("t-s2",AR.s2,d.s2);t("t-s3",AR.s3,d.s3);t("t-safe",AR.safe,d.safe);t("t-foot",AR.foot,d.foot);
-document.getElementById("lang-ar").classList.toggle("on",!ku);
-document.getElementById("lang-ku").classList.toggle("on",ku);
-document.documentElement.lang=ku?"ku":"ar"}
-document.getElementById("lang-ar").onclick=()=>{K.set("lang","ar");location.reload()};
-document.getElementById("lang-ku").onclick=()=>{K.set("lang","ku");location.reload()};
-/* التسجيل إلزامي (§3.12): بطاقات الأدوار تمر عبر التسجيل ما لم يوجد حساب */
-const me=K.get("me",null),dv=K.get("driver",null);
-const ku0=K.get("lang","ar")==="ku";
-applyLang();
-if(me||dv){const n=me?me.name:dv.name;
-document.querySelector(".hero").insertAdjacentHTML("beforeend",`<div style="margin-top:8px"><span class="trusted">${ku0?K.dict.hi:"أهلًا"} ${K.esc(n)} 👋</span></div>`);
-document.getElementById("rc-reg").style.display="none"}
-document.querySelector('a[href="passenger/search.html"]').href=me?"passenger/search.html":"register.html?role=passenger";
-const dl=document.querySelector('a[href="driver/index.html"]');
-dl.href=(dv&&dv.verified)?"driver/index.html":"register.html?role=driver";
-if(dv&&!dv.verified)dl.querySelector("small").textContent=ku0?K.dict.review:"⏳ حسابك قيد المراجعة — اضغط لإكمال التوثيق";
+/* §3.14.3 — مبدّل اللغة عربي/كردي (سوراني) + بوابة التسجيل (§3.12) */
+(function(){
+  const ku=K.get("lang","ar")==="ku",d=K.dict||{};
+  const T={
+    brand:["خطي",d.brand||"خەتتی"],
+    heroh:["خطي",d.brand||"خەتتی"],
+    herop:["منصة الخطوط المباشرة — حافلات وسيارات خطية<br>اشتراك شهري مرن • تتبع حي للأهالي • خطوط عطل سريعة",d.heroP||""],
+    navpx:["دخول الركاب",d.navPx||""],navdr:["حساب السائق",d.navDr||""],navpar:["ولي الأمر",d.navPar||""],navsup:["الدعم",d.navSup||""],
+    gate:["سجّل حساب راكب لرؤية الخطوط",d.gate||""],
+    gates:["إعلانات الخطوط لا تظهر إلا للمسجلين — سجّل مجانًا خلال دقيقة.",d.gates||""],
+    gatebtn:["سجّل كراكب ←",d.gateBtn||""],
+    pxt:["👥 ركاب وطلبة",d.pxT||""],pxs:["اشترك بخط شهري أو مدمج (3 أيام)، اختر مقعدك بصرياً، وفعّل زر «أنا غائب اليوم».",d.pxS||""],
+    pxb:["دخول الركاب",d.navPx||""],
+    drt:["🚘 سائقو الخطوط",d.drT||""],drs:["إدارة حضور الركاب اليومي (صعد/وصل)، استعراض الطلبات المجمعة، ونشر رحلات العطل.",d.drS||""],
+    drb:["لوحة السائقين",d.navDr||""],
+    part:["👨‍👩‍👧 بوابة أولياء الأمور",d.parT||""],pars:["اربط حسابك بكود الطالب الخاص وتابع صعود ابنك وموقع الحافلة وتنبيه الـ 5 دقائق.",d.parS||""],
+    parb:["متابعة الأبناء",d.navPar||""]
+  };
+  const t=(id,pair)=>{const e=document.getElementById(id);if(e)e.innerHTML=ku&&pair[1]?pair[1]:pair[0]};
+  Object.keys(T).forEach(k=>t("t-"+k,T[k]));
+  document.getElementById("lang-ar").classList.toggle("on",!ku);
+  document.getElementById("lang-ku").classList.toggle("on",ku);
+  document.documentElement.lang=ku?"ckb":"ar";
+  document.getElementById("lang-ar").onclick=()=>{K.set("lang","ar");location.reload()};
+  document.getElementById("lang-ku").onclick=()=>{K.set("lang","ku");location.reload()};
+  /* بوابة التسجيل: إخفاء البطاقة للمسجلين */
+  if(K.get("me",null)||K.get("driver",null)){
+    const g=document.getElementById("gate-card");
+    if(g)g.style.display="none";
+  }
+})();
 </script>
 </body></html>

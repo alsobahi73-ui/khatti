@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تواصل مع الدعم — خطّي</title><link rel="stylesheet" href="assets/style.css"></head>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تواصل مع الدعم — خطّي</title><link rel="stylesheet" href="assets/style-legacy.css"></head>
 <body><div class="wrap">
 <div class="hero"><h1>💬 الدعم والتواصل</h1><p>عندك سؤال أو مشكلة؟ راسل فريق خطّي مباشرة</p></div>
 <main>
@@ -14,7 +14,7 @@
 <a class="btn btn-g" href="index.html">→ رجوع للرئيسية</a>
 </main><footer class="app">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
 </div>
-<script src="assets/data.js"></script><script src="assets/app.js"></script>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
 <script>
 const FAQ=[["كيف أحجز مقعدًا؟","من واجهة الراكب ← ابحث عن خط ← اختر الخط ← احجز (يومي، أسبوعي، دفتر 10 رحلات، شهري، أو شهري بخصم طلاب)."],["كيف أدفع؟","كاش للسائق، أو دفع مسبق عبر Zain Cash / آسيا حوالة من داخل التطبيق."],["كيف يتابعني أهلي؟","من حسابك انسخ رابط الأهل الثابت وأرسله لهم عبر واتساب — يعمل من المتصفح بلا تثبيت."],["كيف أبلّغ عن مخالفة؟","من صفحة البلاغ: اختر نوع المخالفة وأرفق دليلًا — البلاغ مربوط برحلتك فقط."],["أنا سائق، كيف أسجّل خطي؟","سجّل حساب سائق ← أكمل توثيق المركبة ← بعد المراجعة البشرية تنشر خطك."]];
 document.getElementById("faq").innerHTML=FAQ.map((f,i)=>`<div class="card" style="margin:8px 0;padding:10px"><b style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display=='none'?'block':'none'">▸ ${f[0]}</b><div style="display:none;margin-top:6px;font-size:14px">${f[1]}</div></div>`).join("");

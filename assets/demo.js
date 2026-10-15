@@ -1,12 +1,23 @@
-/* تهيئة العرض التجريبي فقط؛ جميع البيانات محلية وغير موثقة. */
+/* بيئة تهيئة البيانات الأولية للحسابات التجريبية والعينات التشغيلية. */
 function seedDemo(){
-/* بيانات تجريبية أولية */
-(function(){if(K.get("seeded"))return;
-K.set("trips",[{id:"t1",lineId:"l1",when:"أمس — 07:00",status:"done",rated:false}]);
-K.set("bookings",[]);K.set("reports",[]);K.set("requests",[]);K.set("pxRatings",{});
-K.set("broadcasts",[{t:"تنبيه: غدًا عطلة رسمية — لا توجد رحلات.",d:"قبل يومين"}]);
-K.set("chat_l1",[{me:0,t:"صباح الخير، أنا عند نقطة ساحة الكاظمية",time:"06:52"},{me:1,t:"صباح النور، قادم خلال ٥ دقائق",time:"06:53"}]);
-K.set("myComments",{});K.set("seeded",1);
-})();
-
+  (function(){if(K.get("seeded"))return;
+  K.set("trips",[{id:"t1",lineId:"l1",when:"07:00 – صباحاً",status:"done",rated:false}]);
+  K.set("bookings",[]);
+  K.set("reports",[]);
+  K.set("requests",[]);
+  K.set("pxRatings",{});
+  K.set("broadcasts",[{
+    id:"b_seed_1",
+    t:"تنبيه زحام مروري عام - تم تعديل المسار مؤقتاً.",
+    msg:"تنبيه زحام مروري عام - تم تعديل المسار مؤقتاً.",
+    d:"12/10/2026",
+    time:"12/10/2026"
+  }]);
+  K.set("chat_l1",[
+    {me:0,t:"صباح الخير، الكوستار القادمة متجهة للمحطة المركزية؟",time:"06:52"},
+    {me:1,t:"صباح النور، نعم متواجدين بالقرب من الجسر الخشب.",time:"06:53"}
+  ]);
+  K.set("myComments",{});
+  K.set("seeded",1);
+  })();
 }

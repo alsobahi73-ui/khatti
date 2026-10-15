@@ -1,21 +1,74 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>رحلاتي</title><link rel="stylesheet" href="../assets/style.css"></head>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>اشتراكاتي ورحلاتي — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
-K.page("رحلاتي","search.html");
-const trips=K.get("trips",[]);const app=$("#app");
-if(!trips.length){app.innerHTML=`<div class="bigempty"><div class="ic">🎫</div>لا توجد رحلات بعد<br><a class="btn btn-p" href="search.html" style="margin-top:12px">ابحث عن خط</a></div>`}
-else app.innerHTML=trips.map(t=>{const l=K.tripLine(t);const isHol=!!t.holId;return `
-<div class="card"><div class="row">${K.badge(l.comp)}${isHol?'<span class="mut">🎉 رحلة عطلة</span>':""}<span class="grow"></span><span class="mut">${t.when}</span></div>
-<div style="font-weight:800;margin:6px 0">${l.from} ← ${l.to}</div>
-<div class="mut">${l.driver}${t.seats?` • ${t.seats} مقاعد`:""} • ${t.type||""}${t.pay?" • "+t.pay:""}</div>
-<div class="row" style="margin-top:8px">
-${t.status==="upcoming"&&!isHol?`<a class="btn btn-p btn-s" href="tracking.html?id=${l.id}">تتبع</a>`:""}
-${t.status==="upcoming"&&isHol?`<button class="btn btn-g btn-s" onclick="holDone('${t.id}')">محاكاة انتهاء الرحلة</button>`:""}
-${t.pin&&t.status==="upcoming"?`<div class="card" style="margin:10px 0 0;background:#f7fafc"><b>🎫 رمز الصعود</b><div class="mut" style="font-size:12px">أظهره للسائق عند الصعود — يمنع صعود الباص الخاطئ</div>${K.qrbox(t.pin)}</div>`:""}
-${t.status==="done"&&!t.rated?`<a class="btn btn-a btn-s" href="rate.html?trip=${t.id}">قيّم الرحلة</a>`:""}
-${t.status==="done"&&t.rated?`<span class="mut">تم التقييم ✓</span>`:""}
-${t.status==="done"?`<a class="btn btn-g btn-s" href="report.html?${isHol?"hol="+t.holId:"id="+l.id}">بلاغ مخالفة</a>`:""}
-</div></div>`}).join("")+`<a class="btn btn-g" href="search.html">+ حجز رحلة جديدة</a>`;
-function holDone(id){const tr=K.get("trips",[]);const t=tr.find(x=>x.id===id);if(t){t.status="done";K.set("trips",tr);K.toast("انتهت الرحلة — يمكنك الآن التقييم والبلاغ");setTimeout(()=>location.reload(),700)}}
-</script></body></html>
+(function(){
+  if(!K.access())return;
+  K.page("اشتراكاتي وبطاقة الصعود","search.html");
+  const me=K.get("me",{name:"أحمد علي",phone:"07701112233"});
+  const pCode=me.parentCode||KhattiCore.parentCode(me.phone);
+
+  function render(){
+    const trips=K.get("trips",[]);
+    const att=K.attendance("l1");
+    const myAtt=att[0]||{status:"waiting"};
+    const isAbsent=myAtt.status==="absent";
+
+    $("#app").innerHTML=`
+      <div class="card" style="background:#eff6ff;border:1.5px solid #93c5fd;">
+        <div class="row">
+          <div>
+            <b>👨‍👩‍👧 كود ربط ولي الأمر الخاص بك: <span style="color:#123a5c;font-size:16px;">${K.esc(pCode)}</span></b>
+            <div class="mut">شارك هذا الكود مع ولي أمرك لمتابعة وصولك واستلام تنبيهات الحافلة.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📅 حالة دوامي اليوم (${KhattiCore.today()})</h3>
+        <p class="mut">الحالة الحالية لدى السائق: <b>${isAbsent?"🔴 مسجل غائب اليوم (لن ينتظرك السائق)":"🟢 حاضر — السائق سيمر بنقطة تجمعك"}</b></p>
+        <div class="row" style="gap:8px;">
+          <button class="btn ${isAbsent?'btn-p':'btn-a'}" id="toggle-att">
+            ${isAbsent?"↩️ إلغاء الغياب (أنا داوم اليوم)":"✋ أنا غائب اليوم (إبلاغ السائق فوراً)"}
+          </button>
+          <a class="btn btn-g" href="tracking.html?id=l1">📍 تتبع الحافلة</a>
+        </div>
+      </div>
+
+      <h3 style="margin:12px 0 8px;">🎟️ اشتراكاتي ورحلاتي</h3>
+      <div id="trips-list"></div>
+    `;
+
+    $("#toggle-att").onclick=function(){
+      K.setStudentStatus("l1","st_1",isAbsent?"waiting":"absent");
+      render();
+    };
+
+    $("#trips-list").innerHTML=trips.length===0
+      ? '<div class="mut">لا توجد رحلات مسجلة بعد.</div>'
+      : trips.map(t=>{
+          const l=K.tripLine(t)||{from:"الكرادة",to:"جامعة بغداد",id:"l1"};
+          return `<div class="card">
+            <div class="row"><b>${K.esc(l.from)} ← ${K.esc(l.to)}</b><span class="grow"></span><span class="badge b-m">${t.status==="upcoming"?"اشتراك فعال":"مكتملة"}</span></div>
+            <div class="mut" style="margin-top:4px;">🕒 ${K.esc(t.when)} ${t.seats?`• 💺 ${K.esc(Array.isArray(t.seats)?t.seats.join("، "):t.seats)}`:""}</div>
+            ${t.pin&&t.status==="upcoming"
+              ?`<div class="card" style="margin:8px 0 0;background:#f7fafc"><b>🎫 رمز الصعود</b><div class="mut" style="font-size:12px">أظهره للسائق عند الصعود — يمنع صعود الباص الخاطئ</div>${K.qrbox(t.pin)}</div>`
+              :`<div class="qr-pass">
+              <div>
+                <div style="font-weight:800;color:#123a5c;">بطاقة صعود رقمية (Boarding Pass)</div>
+                <div class="mut">الراكب: ${K.esc(me.name)} • رقم التذكرة: #${K.esc(t.id)}</div>
+              </div>
+              <div class="qr-box">QR ✓</div>
+            </div>`}
+            <div class="row" style="margin-top:8px;gap:6px;">
+              <a class="btn btn-p" href="tracking.html?id=${K.esc(t.lineId||'l1')}">تتبع الخريطة</a>
+              <a class="btn btn-g" href="chat.html?id=${K.esc(t.lineId||'l1')}">محادثة السائق</a>
+              ${KhattiCore.canRate(t)?`<a class="btn btn-a" href="rate.html?id=${K.esc(t.id)}">⭐ تقييم الرحلة</a>`:""}
+            </div>
+          </div>`;
+        }).join("");
+  }
+  render();
+})();
+</script>
+</body></html>

@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>التتبع المباشر للسائق والراكب — خطي</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/style-legacy.css">
 <style>
   .live-hud { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:10px 0; }
   .hud-box { background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:10px; padding:8px; text-align:center; }
@@ -12,7 +12,7 @@
 </head>
 <body><div class="wrap"><main id="app"></main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   const esc=value=>String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));

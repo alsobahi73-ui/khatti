@@ -1,44 +1,215 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تتبع الرحلة</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>التتبع المباشر للسائق والراكب — خطي</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css">
+<style>
+  .live-hud { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:10px 0; }
+  .hud-box { background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:10px; padding:8px; text-align:center; }
+  .hud-box b { display:block; font-size:15px; color:#123a5c; }
+  .hud-box span { font-size:11px; color:#64748b; }
+  .pulse-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#10b981; margin-left:5px; box-shadow:0 0 0 4px rgba(16,185,129,0.25); }
+  .map-wrap { height:280px; border-radius:14px; overflow:hidden; border:2px solid #123a5c; position:relative; background:#e0f2fe; }
+</style>
+</head>
 <body><div class="wrap"><main id="app"></main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
-K.page("تتبع الرحلة","trips.html");
-const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
-$("#app").innerHTML=`
-<div class="card"><div class="row">${K.badge(l.comp)}<span class="grow"></span><span class="mut">رحلة اليوم — ${l.go}</span></div>
-<div class="route" style="font-weight:800;margin:6px 0">${l.from} ← ${l.to}</div>
-<div class="row"><span class="mut">السائق: ${l.driver}</span></div>
-<div class="mapbox" id="tmap" style="margin-top:10px"></div>
-<div class="row" style="margin-top:10px"><span class="mut">الوصول المتوقع لنقطة الالتقاط:</span><b id="eta" style="color:var(--navy)">…</b></div>
-<div class="mut" style="font-size:12px">التتبع يعمل فقط أثناء نافذة الرحلة — محاكاة تجريبية.</div></div>
-<div class="card"><h3>🔔 تنبيهات الرحلة</h3><div class="alerts" id="feed"><div class="alert ok">انطلقت الرحلة من ${l.from}<small>قبل قليل</small></div></div></div>
-<div class="card"><h3>🆘 الطوارئ</h3>
-<div class="field"><label>رقم الطوارئ (إسعاف / شرطة) — قابل للضبط</label><input id="emgnum" dir="ltr" placeholder="مثال: 122" style="text-align:right"></div>
-<div class="row"><a class="btn btn-d grow" id="emgcall" href="#">📞 اتصال بالإسعاف/الطوارئ</a><button class="btn btn-d" id="sos">🆘 تنبيه الأهل</button></div>
-<div class="mut" style="font-size:12px;margin-top:6px">الاتصال يشارك موقعك الحالي تلقائيًا (حسب جهازك) — أدخل الرقم أولًا.</div></div>
-<div class="card"><h3>🛡️ فحص الأمان</h3>
-<div class="row"><button class="btn btn-g grow" id="rcsim">محاكاة: توقف مفاجئ ⚠️</button></div>
-<div id="ridecheck" style="display:none;margin-top:10px;text-align:center"><b>هل أنت بخير؟</b><div class="row" style="margin-top:8px"><button class="btn btn-a grow" id="rcok">🟢 بخير</button><button class="btn btn-d grow" id="rchelp">🔴 أحتاج مساعدة</button></div><div class="mut" style="font-size:12px;margin-top:6px">عدم الرد خلال 10 ثوانٍ يُنبّه الأهل تلقائيًا (تجريبي).</div></div></div>
-<div class="row"><a class="btn btn-g grow" href="chat.html?id=${l.id}">💬 دردشة مع السائق</a></div>`;
-const m=K.map("tmap",l.route[0],11);
-function feed(txt,cls=""){const f=$("#feed");f.insertAdjacentHTML("afterbegin",`<div class="alert ${cls}">${txt}<small>الآن</small></div>`)}
-if(m){let mins=9;$("#eta").textContent=mins+" دقائق";
- const stop=K.sim(m,l.route,(ev,left)=>{if(ev==="tick"){mins=Math.max(1,Math.ceil(left*9));$("#eta").textContent=mins+" دقائق";
-   if(left<0.55&&!stop._h){stop._h=1;feed("🚌 الباص اقترب من نقطة الالتقاط","warn")}
-  }else{$("#eta").textContent="وصل ✓";feed("✅ وصل الباص — رحلة سعيدة","ok");K.toast("وصل الباص ✓")}});
-}else{$("#eta").textContent="غير متاح"}
-$("#sos").onclick=()=>{const r=K.get("reports",[]);r.unshift({id:"r"+Date.now(),line:l.from+" ← "+l.to,cat:"زر الطوارئ",txt:"إرسال الموقع لحظيًا للأهل وجهة الطوارئ",d:"الآن",status:"🚨 بلاغ عالي الأولوية — تم إرسال الموقع للأهل"});K.set("reports",r);
-feed("🚨 تم تفعيل زر الطوارئ — أُرسل موقعك للأهل","bad");K.toast("تم إرسال موقعك للأهل وجهة الطوارئ 🆘")};
-/* §3.14.2 — رقم طوارئ قابل للضبط */
-const emgIn=$("#emgnum");emgIn.value=K.get("emgNum","");
-const setTel=()=>{$("#emgcall").href=emgIn.value.trim()?("tel:"+emgIn.value.trim()):"#"};
-setTel();emgIn.onchange=()=>{K.set("emgNum",emgIn.value.trim());setTel();K.toast("تم حفظ رقم الطوارئ ✓")};
-$("#emgcall").onclick=e=>{if(!emgIn.value.trim()){e.preventDefault();K.toast("أدخل رقم الطوارئ أولًا ⚠️");emgIn.focus()}};
-/* §3.14.6 — فحص الشذوذ RideCheck */
-let rcTimer=null;
-$("#rcsim").onclick=()=>{const rc=$("#ridecheck");rc.style.display="block";feed("⚠️ توقف مفاجئ غير متوقع — جارٍ التحقق من سلامتك","warn");
-clearTimeout(rcTimer);rcTimer=setTimeout(()=>{rc.style.display="none";feed("🚨 لم يرد الراكب خلال 10 ثوانٍ — تم تنبيه الأهل تلقائيًا","bad");K.toast("🚨 تم تنبيه الأهل تلقائيًا")},10000)};
-$("#rcok").onclick=()=>{clearTimeout(rcTimer);$("#ridecheck").style.display="none";feed("🟢 الراكب بخير — متابعة الرحلة","ok")};
-$("#rchelp").onclick=()=>{clearTimeout(rcTimer);$("#ridecheck").style.display="none";$("#sos").click()};
-</script></body></html>
+(function(){
+  if(!K.access())return;
+  const id=new URLSearchParams(location.search).get("id")||"l1";
+  const l=K.line(id);
+  K.page("التتبع اللحظي للسائق والراكب","search.html");
+  if(!l){K.missing();return;}
+
+  const route=Array.isArray(l.route)&&l.route.length>=2?l.route:[[33.301,44.425],[33.288,44.405],[33.272,44.382]];
+  let driverPos=[...route[0]];
+  let passengerPos=[route[Math.min(1,route.length-1)][0]+0.002, route[Math.min(1,route.length-1)][1]-0.002];
+  let driverSpeed=38;
+  let gpsWatchId=null;
+  let simTimer=null;
+  let alerted5Min=false;
+
+  const bc = typeof BroadcastChannel!=="undefined" ? new BroadcastChannel("khatti_live_track") : null;
+
+  $("#app").innerHTML=`
+    <div class="card">
+      <div class="row">
+        <span><i class="pulse-dot"></i><b>بث موقع مباشر ولحظي: ${K.esc(l.from)} ← ${K.esc(l.to)}</b></span>
+        <span class="grow"></span>
+        <span id="eta-badge" class="badge b-b">متصل لحظياً</span>
+      </div>
+
+      <div class="live-hud">
+        <div class="hud-box"><b id="hud-dist">-- كم</b><span>المسافة بينكما</span></div>
+        <div class="hud-box"><b id="hud-eta">-- د</b><span>وصول السائق إليك</span></div>
+        <div class="hud-box"><b id="hud-speed">38 كم/س</b><span>سرعة الحافلة</span></div>
+      </div>
+
+      <div id="map" class="map-wrap"></div>
+
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn btn-p" id="btn-my-gps">📡 تفعيل موقعي الحقيقي (GPS)</button>
+        <button class="btn btn-g" id="btn-walk-stop">🚶‍♂️ تحريك موقع الراكب للمحطة</button>
+        <button class="btn btn-a" id="sos">🚨 نداء طوارئ (SOS)</button>
+      </div>
+      <div class="mut" style="margin-top:6px;" id="coords-bar"></div>
+    </div>
+
+    <div class="card">
+      <h3>📍 محطات التجمع وحركة الاقتراب</h3>
+      ${K.stepperHTML(l,1)}
+    </div>
+
+    <div class="card"><h3>🆘 الطوارئ</h3>
+      <div class="field"><label>رقم الطوارئ (إسعاف / شرطة) — قابل للضبط</label><input id="emgnum" dir="ltr" placeholder="مثال: 122" style="text-align:right"></div>
+      <div class="row"><a class="btn btn-d grow" id="emgcall" href="#">📞 اتصال بالإسعاف/الطوارئ</a></div>
+      <div class="mut" style="font-size:12px;margin-top:6px">الاتصال يشارك موقعك الحالي تلقائيًا (حسب جهازك) — أدخل الرقم أولًا.</div>
+    </div>
+
+    <div class="card"><h3>🛡️ فحص الأمان</h3>
+      <div class="row"><button class="btn btn-g grow" id="rcsim">محاكاة: توقف مفاجئ ⚠️</button></div>
+      <div id="ridecheck" style="display:none;margin-top:10px;text-align:center"><b>هل أنت بخير؟</b><div class="row" style="margin-top:8px"><button class="btn btn-a grow" id="rcok">🟢 بخير</button><button class="btn btn-d grow" id="rchelp">🔴 أحتاج مساعدة</button></div><div class="mut" style="font-size:12px;margin-top:6px">عدم الرد خلال 10 ثوانٍ يُنبّه الأهل تلقائيًا (تجريبي).</div></div>
+    </div>
+  `;
+
+  let mapObj=null, busMarker=null, paxMarker=null, linkLine=null;
+  const mapEl=document.getElementById("map");
+
+  if(typeof L!=="undefined"){
+    try{
+      mapObj=L.map("map",{zoomControl:true}).setView(driverPos,13);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(mapObj);
+      L.polyline(route,{color:"#123a5c",weight:4,opacity:0.75}).addTo(mapObj);
+      busMarker=L.marker(driverPos,{icon:L.divIcon({className:"mapbus",html:'<div style="font-size:24px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));">🚌</div>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(mapObj).bindPopup("🚌 موقع السائق المباشر");
+      paxMarker=L.marker(passengerPos,{draggable:true,icon:L.divIcon({className:"mappax",html:'<div style="font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));">🙋‍♂️</div>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(mapObj).bindPopup("📍 موقع الراكب المباشر (اسحبني لتغيير مكانك)");
+      paxMarker.on("drag",e=>{
+        const ll=e.target.getLatLng();
+        passengerPos=[ll.lat,ll.lng];
+        syncLocations("passenger");
+      });
+      linkLine=L.polyline([driverPos,passengerPos],{color:"#10b981",weight:3,dashArray:"6,6"}).addTo(mapObj);
+      setTimeout(()=>mapObj.invalidateSize(),300);
+    }catch(e){ mapObj=null; }
+  }
+
+  function updateHUD(){
+    const dKm=KhattiCore.dist(driverPos,passengerPos);
+    const distText=dKm<1 ? Math.round(dKm*1000)+" متر" : dKm.toFixed(2)+" كم";
+    const etaMin=Math.max(1,Math.ceil((dKm/Math.max(15,driverSpeed))*60));
+    $("#hud-dist").textContent=distText;
+    $("#hud-eta").textContent=dKm<0.08 ? "وصل إليك ✓" : etaMin+" دقائق";
+    $("#hud-speed").textContent=driverSpeed+" كم/س";
+    $("#coords-bar").textContent=`🚌 السائق: [${driverPos[0].toFixed(4)}, ${driverPos[1].toFixed(4)}] | 🙋‍♂️ الراكب: [${passengerPos[0].toFixed(4)}, ${passengerPos[1].toFixed(4)}]`;
+
+    if(!alerted5Min && etaMin<=5 && dKm>=0.08){
+      alerted5Min=true;
+      K.toast("🔔 تنبيه لحظي: السائق اقترب من موقعك (أقل من "+etaMin+" دقائق)!");
+    }
+
+    if(mapObj && busMarker && paxMarker && linkLine){
+      busMarker.setLatLng(driverPos);
+      paxMarker.setLatLng(passengerPos);
+      linkLine.setLatLngs([driverPos,passengerPos]);
+    }else{
+      mapEl.innerHTML=`
+        <div class="mapfb" id="map-fallback" style="padding:18px;text-align:center;">
+          <div style="font-weight:800;color:#123a5c;margin-bottom:8px;">🗺️ رادار التتبع المباشر (وضع عدم الاتصال)</div>
+          <div>🚌 السائق: ${driverPos[0].toFixed(4)}, ${driverPos[1].toFixed(4)}</div>
+          <div style="margin:6px 0;color:#047857;font-weight:800;">↕️ المسافة اللحظية الفاصلة: ${distText} (~${etaMin} د)</div>
+          <div>🙋‍♂️ الراكب: ${passengerPos[0].toFixed(4)}, ${passengerPos[1].toFixed(4)}</div>
+        </div>
+      `;
+    }
+  }
+
+  function syncLocations(who){
+    const payload={lineId:l.id,driverPos,passengerPos,driverSpeed,ts:Date.now(),who};
+    K.set("live_pos_"+l.id,payload);
+    if(bc)bc.postMessage(payload);
+    updateHUD();
+  }
+
+  if(bc){
+    bc.onmessage=ev=>{
+      if(ev.data && ev.data.lineId===l.id){
+        if(ev.data.driverPos)driverPos=ev.data.driverPos;
+        if(ev.data.passengerPos)passengerPos=ev.data.passengerPos;
+        if(ev.data.driverSpeed)driverSpeed=ev.data.driverSpeed;
+        updateHUD();
+      }
+    };
+  }
+
+  // Smooth continuous interpolation for bus movement along the route and toward passenger
+  const pts=[];
+  for(let i=1;i<route.length;i++){
+    const a=route[i-1],b=route[i];
+    for(let k=1;k<=30;k++)pts.push([a[0]+(b[0]-a[0])*k/30,a[1]+(b[1]-a[1])*k/30]);
+  }
+  let stepIdx=0;
+  simTimer=setInterval(()=>{
+    stepIdx=(stepIdx+1)%pts.length;
+    driverPos=pts[stepIdx];
+    driverSpeed=32+Math.round(Math.sin(stepIdx/3)*8);
+    syncLocations("driver_sim");
+  },1000);
+
+  $("#btn-my-gps").onclick=function(){
+    if(!navigator.geolocation){
+      K.toast("المتصفح لا يدعم GPS — تم تفعيل المحاكاة الدقيقة لموقعك");
+      return;
+    }
+    if(gpsWatchId!==null){
+      navigator.geolocation.clearWatch(gpsWatchId);
+      gpsWatchId=null;
+      this.textContent="📡 تفعيل موقعي الحقيقي (GPS)";
+      K.toast("تم إيقاف بث GPS الحقيقي");
+      return;
+    }
+    this.textContent="🟢 جاري بث موقعك الحقيقي لحظياً...";
+    gpsWatchId=navigator.geolocation.watchPosition(pos=>{
+      passengerPos=[pos.coords.latitude,pos.coords.longitude];
+      syncLocations("passenger_gps");
+      if(mapObj)mapObj.panTo(passengerPos);
+    },()=>{
+      K.toast("تعذر جلب GPS الحقيقي — يمكنك سحب أيقونة الراكب على الخريطة مباشرة");
+    },{enableHighAccuracy:true,maximumAge:2000});
+  };
+
+  $("#btn-walk-stop").onclick=function(){
+    passengerPos=[
+      passengerPos[0]+(driverPos[0]-passengerPos[0])*0.35,
+      passengerPos[1]+(driverPos[1]-passengerPos[1])*0.35
+    ];
+    syncLocations("passenger_walk");
+    K.toast("🚶‍♂️ تحرك الراكب نحو نقطة التقاء الحافلة — تم تحديث موقعك لدى السائق!");
+  };
+
+  $("#sos").onclick=function(){
+    const r=K.get("reports",[]);
+    r.unshift({id:"r"+Date.now(),line:l.from+" ← "+l.to,cat:"زر الطوارئ",txt:"إرسال الموقع لحظيًا للأهل وجهة الطوارئ",d:"الآن",status:"🚨 بلاغ عالي الأولوية — تم إرسال الموقع للأهل"});
+    K.set("reports",r);
+    K.toast("🚨 تم تفعيل زر الطوارئ — أُرسل موقعك للأهل");
+  };
+
+  /* §3.14.2 — رقم طوارئ قابل للضبط */
+  const emgIn=$("#emgnum");emgIn.value=K.get("emgNum","");
+  const setTel=()=>{$("#emgcall").href=emgIn.value.trim()?("tel:"+emgIn.value.trim()):"#"};
+  setTel();emgIn.onchange=()=>{K.set("emgNum",emgIn.value.trim());setTel();K.toast("تم حفظ رقم الطوارئ ✓")};
+  $("#emgcall").onclick=e=>{if(!emgIn.value.trim()){e.preventDefault();K.toast("أدخل رقم الطوارئ أولًا ⚠️");emgIn.focus()}};
+
+  /* §3.14.6 — فحص الشذوذ RideCheck */
+  let rcTimer=null;
+  $("#rcsim").onclick=()=>{
+    const rc=$("#ridecheck");rc.style.display="block";
+    K.toast("⚠️ توقف مفاجئ غير متوقع — جارٍ التحقق من سلامتك");
+    clearTimeout(rcTimer);
+    rcTimer=setTimeout(()=>{rc.style.display="none";K.toast("🚨 لم يرد الراكب خلال 10 ثوانٍ — تم تنبيه الأهل تلقائيًا")},10000);
+  };
+  $("#rcok").onclick=()=>{clearTimeout(rcTimer);$("#ridecheck").style.display="none";K.toast("🟢 الراكب بخير — متابعة الرحلة")};
+  $("#rchelp").onclick=()=>{clearTimeout(rcTimer);$("#ridecheck").style.display="none";$("#sos").click()};
+
+  updateHUD();
+})();
+</script>
+</body></html>

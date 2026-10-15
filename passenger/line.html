@@ -1,34 +1,26 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>بطاقة الخط</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>تفاصيل الخط — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
 <script>
-K.page("بطاقة الخط","search.html");
-const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
-const app=$("#app");
-app.innerHTML=`
-<div class="card"><div class="top row">${K.badge(l.comp)}${K.trusted(l)}</div>
-<div class="route" style="font-size:20px;font-weight:800;margin:6px 0">${l.from} ← ${l.to}</div>
-<div class="mut">${l.driver} • ${l.vehicle}</div>
-<div class="row" style="margin-top:8px">${K.stars(l.rating)}<b>${l.rating}</b><span class="mut">(${l.rc} تقييمًا)</span></div>
-<div class="stats" style="margin-top:10px">
-<div class="stat"><b>${K.fmt(l.price)}</b><span>اشتراك شهري</span></div>
-<div class="stat"><b>${l.free} / ${l.seats}</b><span>مقعدًا متاحًا</span></div>
-<div class="stat"><b>${l.go}</b><span>ذهاب • إياب ${l.back}</span></div></div>
-<h3 style="margin:10px 0 6px">📍 نقاط الالتقاط</h3>
-${l.pickups.map(p=>`<div class="alert">${p}</div>`).join("")}
-<h3 style="margin:10px 0 6px">المسار</h3><div class="mapbox" id="rmap"></div>
-<div class="row" style="margin-top:10px">
-<a class="btn btn-p grow" href="booking.html?id=${l.id}">احجز مقعدًا</a>
-<a class="btn btn-g grow" href="tracking.html?id=${l.id}">تتبع الرحلة</a></div>
-<div class="row"><a class="btn btn-g grow" href="chat.html?id=${l.id}">💬 دردشة مع السائق</a></div>
-</div>
-<div class="card"><h3>💬 تعليقات الركاب (${l.comments.length})</h3><div id="cmts"></div>
-<div class="note" style="margin-top:10px">تعليق يصف مخالفة؟ <a href="report.html?id=${l.id}"><b>حوّله إلى بلاغ رسمي ←</b></a></div></div>`;
-const m=K.map("rmap",l.route[0],11);
-if(m){try{L.polyline(l.route,{color:"#123a5c",weight:4}).addTo(m);L.marker(l.route[0]).addTo(m).bindPopup(l.from);L.marker(l.route[l.route.length-1]).addTo(m).bindPopup(l.to)}catch(e){}}
-const mine=K.get("myComments",{});
-$("#cmts").innerHTML=l.comments.map((c,i)=>{const mr=mine[id+":"+i];
-return `<div class="cmt"><div class="who">${K.esc(c.n)} <span>• راكب موثّق • ${c.d}</span></div><div>${K.esc(c.t)}</div>
-${c.r?`<div class="reply"><b>رد السائق:</b> ${K.esc(c.r)}</div>`:mr?`<div class="reply"><b>رد السائق:</b> ${K.esc(mr)}</div>`:`<div class="mut" style="font-size:12px;margin-top:4px">بانتظار رد السائق…</div>`}</div>`}).join("");
+(function(){
+  if(!K.access())return;
+  const id=new URLSearchParams(location.search).get("id")||"l1";
+  const l=K.line(id);
+  K.page("تفاصيل الخط","search.html");
+  if(!l){K.missing();return;}
+  $("#app").innerHTML=`
+    <div class="card">
+      <div class="row">${K.badge(l.comp)}${K.trusted(l)}<span class="grow"></span><b>${K.fmt(l.price)}/شهر</b></div>
+      <h2 style="margin:8px 0;">${K.esc(l.from)} ← ${K.esc(l.to)}</h2>
+      <div class="mut">السائق: ${K.esc(l.driver||l.driverName)} • ${K.esc(l.vehicle)}</div>
+      <div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap;">
+        <a class="btn btn-p" href="booking.html?id=${K.esc(l.id)}">💺 حجز مقعد</a>
+        <a class="btn btn-g" href="tracking.html?id=${K.esc(l.id)}">📍 التتبع اللحظي</a>
+        <a class="btn btn-g" href="chat.html?id=${K.esc(l.id)}">💬 محادثة</a>
+        <a class="btn btn-g" href="report.html?id=${K.esc(l.id)}">⚠️ إبلاغ</a>
+      </div>
+    </div>
+    <div class="card"><h3>📍 محطات التجمع</h3>${K.stepperHTML(l,1)}</div>
+  `;
+})();
 </script></body></html>
