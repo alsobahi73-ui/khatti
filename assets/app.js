@@ -28,8 +28,28 @@ sim(m,route,onEv){ /* محاكاة باص متحرك */
  let i=0;const iv=setInterval(()=>{i++;if(i>=pts.length){clearInterval(iv);onEv&&onEv("done",0);return}bus.setLatLng(pts[i]);onEv&&onEv("tick",1-i/pts.length)},900);
  return ()=>clearInterval(iv)}catch(e){return ()=>{}}},
 dist(a,b){const R=6371,dLa=(b[0]-a[0])*Math.PI/180,dLo=(b[1]-a[1])*Math.PI/180;const s=Math.sin(dLa/2)**2+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(s))},
-esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")}
-};
+esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")},
+/* §3.14.1+8 — رمز صعود QR/PIN */
+qrbox(pin){let c="";for(let i=0;i<81;i++){c+=`<i class="${(pin.charCodeAt(i%pin.length)*7+i*13)%3===0?"on":""}"></i>`}return `<div class="qrbox">${c}</div><div class="pinbig">${pin.split("").join(" ")}</div>`},
+/* §3.14.3 — قاموس كردي (سوراني) */
+dict:{
+demoNotice:"🧪 وەشانێکی تاقیکاری — هەموو داتا و کەس و ژمارەکان خەیاڵین بۆ پیشاندان",
+kuNote:"وەرگێڕانی کوردی لە پەرەپێدانە",
+brand:"خەتتی",
+heroSub:"هێڵەکەت ڕێکبخە — کورسییەکەت بگرە — دڵنیابە لە خێزانەکەت<br>پلاتفۆرمی هێڵەکانی گواستنەوە بۆ خوێندکاران و فەرمانبەران لە هەموو عێراق",
+simBadge:"🎮 شێوەکاری ڕاستەقینەی کارلێککەر",
+tryNote:"ئەپەکە بە تەواوی بە داتای تاقیکاری تاقیبکەرەوە — ڕای تۆ وەشانی ڕاستەقینە دروست دەکات",
+reg:"هەژمارێکی نوێ تۆماربکە",regSub:"سەرنشین یان شۆفێر — تۆمارکردن پێویستە پێش بەکارهێنانی ئەپ",
+px:"من سەرنشینم",pxSub:"بگەڕێ بۆ هێڵ، کورسی بگرە، پاسەکە بە زیندوویی ببینە",
+dr:"من شۆفێرم",drSub:"هێڵەکەت و بەشداربووانت و هەڵسەنگاندن و ڕاپۆرتی داهاتت بەڕێوەببە",
+par:"بەستەری خێزان",parSub:"گەشتی منداڵەکەت بە زیندوویی ببینە — لە وێبگەڕ کار دەکات بەبێ دامەزراندن",
+sup:"پشتگیری و پەیوەندی",supSub:"پرسیاری باو — ڕاستەوخۆ پەیوەندی بە تیمی خەتتی بکە",
+how:"چۆن کاردەکات؟",
+s1:"هێڵەکەت تۆماربکە یان بگەڕێ بۆ هێڵ",s2:"بگرە و بە زیندوویی ببینە",s3:"هەڵبسەنگێنە و سەرپێچی ڕابگەیەنە",
+safe:"💡 <b>سەلامەتی یەکەم:</b> پلاتفۆرمی سەرپێچی بەڵگەدار + هەڵسەنگاندنی کوێر + شوێنپێهەڵگرتن تەنها لە کاتی گەشت + نیشانەی «شۆفێری متمانەپێکراو».",
+foot:"خەتتی — نموونەی سەرەتایی • لە عێراق دروستکراوە 🇮🇶",
+hi:"بەخێربێیت",review:"⏳ هەژمارەکەت لە چاوەڕوانی پێداچوونەوە — کرتە بکە بۆ تەواوکردنی بەڵگەنامە"
+}};
 /* بيانات تجريبية أولية */
 (function(){if(K.get("seeded"))return;K.set("seeded",1);
 K.set("trips",[{id:"t1",lineId:"l1",when:"أمس — 07:00",status:"done",rated:false}]);
@@ -68,8 +88,11 @@ app.prepend(box)}
 /* تنبيه تجريبي دائم — يظهر أعلى كل صفحة (يتوقعه اختبار #demo-notice) */
 document.addEventListener("DOMContentLoaded",()=>{
 if(document.getElementById("demo-notice"))return;
+const ku=K.get("lang","ar")==="ku";
 const n=document.createElement("div");n.id="demo-notice";
 n.style.cssText="background:#fff8ea;border-bottom:2px solid #e09a12;color:#7a5200;font-size:12px;text-align:center;padding:6px 10px;line-height:1.7";
-n.textContent="🧪 نسخة تجريبية — جميع البيانات والأشخاص والأرقام وهمية لغرض العرض فقط";
+n.textContent=ku?K.dict.demoNotice:"🧪 نسخة تجريبية — جميع البيانات والأشخاص والأرقام وهمية لغرض العرض فقط";
+const isLanding=!/\/(passenger|driver|parent)\//.test(location.pathname);
+if(ku&&!isLanding){const s=document.createElement("div");s.style.cssText="font-size:11px;opacity:.85";s.textContent=K.dict.kuNote;n.appendChild(s)}
 document.body.prepend(n);
 });

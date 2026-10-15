@@ -6,14 +6,18 @@ K.page("تأكيد الحجز","search.html");
 const id=new URLSearchParams(location.search).get("id")||"l1";const l=K.line(id);
 let type="month",pay="cash";
 const app=$("#app");
-function price(){return type==="month"?l.price:l.day}
+const TYPES={day:["🎫 مقعد يومي",l=>l.day],week:["📅 اشتراك أسبوعي",l=>l.day*6],pack10:["🎟️ دفتر 10 رحلات",l=>l.day*9],month:["🗓️ اشتراك شهري",l=>l.price],student:["🎓 شهري — خصم طلاب",l=>Math.round(l.price*0.85)]};
+function price(){return TYPES[type][1](l)}
 app.innerHTML=`
 <div class="card"><div class="row">${K.badge(l.comp)}</div>
 <div class="route" style="font-size:18px;font-weight:800;margin:6px 0">${l.from} ← ${l.to}</div>
 <div class="mut">${l.driver} • ذهاب ${l.go} / إياب ${l.back}</div></div>
 <div class="card"><h3>نوع الحجز</h3>
-<label class="radio" data-t="day"><input type="radio" name="t"> مقعد يومي — ${K.fmt(l.day)}</label>
-<label class="radio on" data-t="month"><input type="radio" name="t" checked> اشتراك شهري — ${K.fmt(l.price)}</label>
+<label class="radio" data-t="day"><input type="radio" name="t"> 🎫 مقعد يومي — ${K.fmt(l.day)}</label>
+<label class="radio" data-t="week"><input type="radio" name="t"> 📅 اشتراك أسبوعي — ${K.fmt(l.day*6)}</label>
+<label class="radio" data-t="pack10"><input type="radio" name="t"> 🎟️ دفتر 10 رحلات — ${K.fmt(l.day*9)} <span class="mut">(ادفع 9 واحصل على 10)</span></label>
+<label class="radio on" data-t="month"><input type="radio" name="t" checked> 🗓️ اشتراك شهري — ${K.fmt(l.price)}</label>
+<label class="radio" data-t="student"><input type="radio" name="t"> 🎓 شهري — خصم طلاب 15% — ${K.fmt(Math.round(l.price*0.85))}</label>
 <div class="field" style="margin-top:10px"><label>الاسم</label><input id="nm" value="${K.pname()}"></div>
 <div class="field"><label>رقم الهاتف</label><input id="ph" value="${K.pphone()}" dir="ltr" style="text-align:right"></div></div>
 <div class="card"><h3>طريقة الدفع</h3>
@@ -25,8 +29,9 @@ app.innerHTML=`
 <button class="btn btn-a" id="ok">تأكيد الحجز ✓</button></div>`;
 $$(".radio[data-t]").forEach(r=>r.onclick=()=>{$$(".radio[data-t]").forEach(x=>x.classList.remove("on"));r.classList.add("on");type=r.dataset.t;$("#tot").textContent=K.fmt(price())});
 $$(".radio[data-p]").forEach(r=>r.onclick=()=>{$$(".radio[data-p]").forEach(x=>x.classList.remove("on"));r.classList.add("on");pay=r.dataset.p});
-$("#ok").onclick=()=>{const b=K.get("bookings",[]);const nb={id:"b"+Date.now(),lineId:id,when:"اليوم — "+l.go,type:type==="month"?"اشتراك شهري":"مقعد يومي",pay:{cash:"كاش",zain:"Zain Cash",asia:"آسيا حوالة"}[pay],status:"upcoming"};
+$("#ok").onclick=()=>{const b=K.get("bookings",[]);const pin=String(Math.floor(1000+Math.random()*9000));
+const nb={id:"b"+Date.now(),lineId:id,when:"اليوم — "+l.go,type:TYPES[type][0],pay:{cash:"كاش",zain:"Zain Cash",asia:"آسيا حوالة"}[pay],status:"upcoming",pin:pin};
 b.unshift(nb);K.set("bookings",b);
-const trips=K.get("trips",[]);trips.unshift({id:nb.id,lineId:id,when:"اليوم — "+l.go,status:"upcoming",rated:false});K.set("trips",trips);
-K.toast("تم الحجز بنجاح ✓");setTimeout(()=>location.href="trips.html",900)};
+const trips=K.get("trips",[]);trips.unshift({id:nb.id,lineId:id,when:"اليوم — "+l.go,status:"upcoming",rated:false,pin:pin});K.set("trips",trips);
+K.toast("تم الحجز بنجاح ✓ — رمز صعودك: "+pin.split("").join(" "));setTimeout(()=>location.href="trips.html",1600)};
 </script></body></html>

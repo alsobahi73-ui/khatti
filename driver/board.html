@@ -1,0 +1,29 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تحقق الصعود — خطّي</title><link rel="stylesheet" href="../assets/style.css"></head>
+<body><div class="wrap"><main id="app"></main></div>
+<script src="../assets/data.js"></script><script src="../assets/app.js"></script>
+<script>
+K.page("تحقق صعود الركاب","index.html");
+function render(){
+const bs=K.get("bookings",[]).filter(b=>!b.boarded);
+const done=K.get("bookings",[]).filter(b=>b.boarded);
+$("#app").innerHTML=`
+<div class="card"><h3>🎫 تحقق من صعود الراكب</h3>
+<div class="mut" style="font-size:13px;margin-bottom:8px">اطلب من الراكب رمز الصعود (PIN) الظاهر في حجزه — أو امسح رمز QR.</div>
+<div class="field"><label>رمز الصعود (4 أرقام)</label><input id="pin" inputmode="numeric" maxlength="4" placeholder="••••" dir="ltr" style="text-align:center;letter-spacing:8px;font-size:22px"></div>
+<div class="row"><button class="btn btn-a grow" id="verify">تحقق وسجّل الصعود ✓</button><button class="btn btn-g" id="scan">📷 مسح QR</button></div></div>
+<div class="card"><h3>⏳ بانتظار الصعود (${bs.length})</h3>
+${bs.length?bs.map(b=>{const l=K.line(b.lineId);return `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>🧑‍🎓 ${K.esc(K.pname())}</span><span class="grow"></span><span class="mut">${l.from} ← ${l.to} • ${b.type||""}</span></div>`}).join(""):'<div class="mut">لا توجد حجوزات بانتظار الصعود.</div>'}</div>
+${done.length?`<div class="card"><h3>✅ صعدوا (${done.length})</h3>${done.map(b=>`<div class="mut">✓ ${K.esc(b.boardName||"راكب")} — ${b.boardAt||""}</div>`).join("")}</div>`:""}`;
+$("#verify").onclick=()=>{
+const pin=$("#pin").value.trim();
+if(!/^\d{4}$/.test(pin)){K.toast("أدخل رمزًا من 4 أرقام");return}
+const bs=K.get("bookings",[]);const b=bs.find(x=>x.pin===pin&&!x.boarded);
+if(!b){K.toast("رمز غير صالح أو مستخدم مسبقًا ❌");return}
+b.boarded=true;b.boardAt=new Date().toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"});b.boardName=K.pname();K.set("bookings",bs);
+const tr=K.get("trips",[]);const t=tr.find(x=>x.pin===pin);if(t){t.boarded=true;K.set("trips",tr)}
+K.set("boardEv",{name:b.boardName,time:b.boardAt});
+K.toast("✅ تم تسجيل الصعود — "+b.boardName);setTimeout(render,800)};
+$("#scan").onclick=()=>K.toast("📷 مسح QR متاح في النسخة الحقيقية — استخدم رمز PIN في النسخة التجريبية");
+}
+render();
+</script></body></html>

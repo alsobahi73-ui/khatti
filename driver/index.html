@@ -17,11 +17,22 @@ $("#app").innerHTML=`
 <div class="mut">معدل الالتزام بالمواعيد: <b>94%</b></div>
 <div class="bar"><i style="width:94%"></i></div>
 <div class="mut" style="margin-top:6px">💡 حافظ على تقييمك فوق 4.5 لتبقى في مقدمة نتائج البحث.</div></div>
+<div class="card"><h3>🔄 التوثيق الدوري</h3>
+<div class="mut" style="font-size:13px;line-height:1.9">صورة سيلفي مطلوبة <b>كل 30 يومًا</b> للتأكد أنك صاحب الحساب الموثّق — يمنع مشاركة الحسابات.</div>
+<div class="row" style="margin-top:8px"><span class="mut">آخر توثيق:</span><b id="selfied" style="color:var(--navy)"></b></div>
+<div class="field" style="margin-top:8px"><label>التقط صورة سيلفي جديدة</label><input type="file" id="selfie" accept="image/*"></div></div>
 <div class="card"><h3>🗺️ خريطة الطلب — ركاب بانتظار خطوط</h3>
 ${DEMAND.map(d=>`<div class="alert" style="margin-bottom:8px"><b>${d.n} راكبًا</b> يطلبون: ${d.route} <span class="badge ${d.comp==="girls"?"b-g":d.comp==="boys"?"b-b":"b-m"}">${COMP[d.comp]}</span><br><button class="btn btn-a btn-s" style="margin-top:6px" onclick="K.toast('فكرة ممتازة! سجّل خطًا جديدًا بهذا المسار من إدارة الخطوط')">افتح خطًا بهذا المسار</button></div>`).join("")}</div>
 <div class="card"><h3>إدارة</h3>
 <a class="btn btn-p" href="line-edit.html">⚙️ إدارة الخط (المسار، الأوقات، المقاعد، الصفة)</a>
+<a class="btn btn-a" href="board.html">🎫 تحقق صعود الركاب (PIN/QR)</a>
 <a class="btn btn-g" href="broadcast.html">📢 بث جماعي للركاب</a>
 <a class="btn btn-g" href="holiday-post.html">🎉 رحلات العطل — أعلن مقاعد شاغرة</a>
 <a class="btn btn-g" href="ratings.html">⭐ التقييمات والتعليقات (${l.comments.filter(c=>!c.r).length} بانتظار الرد)</a></div>`;
+/* §3.14.5 — توثيق دوري بالسيلفي */
+const sd=K.get("selfieDate",null);
+$("#selfied").textContent=sd?sd:"قبل 12 يومًا (تجريبي)";
+$("#selfie").onchange=e=>{if(!e.target.files[0])return;
+const d=new Date().toLocaleDateString("ar");K.set("selfieDate",d);
+$("#selfied").textContent=d;K.toast("✅ تم توثيق السيلفي — صالح لـ 30 يومًا")};
 </script></body></html>

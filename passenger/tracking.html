@@ -13,7 +13,13 @@ $("#app").innerHTML=`
 <div class="row" style="margin-top:10px"><span class="mut">الوصول المتوقع لنقطة الالتقاط:</span><b id="eta" style="color:var(--navy)">…</b></div>
 <div class="mut" style="font-size:12px">التتبع يعمل فقط أثناء نافذة الرحلة — محاكاة تجريبية.</div></div>
 <div class="card"><h3>🔔 تنبيهات الرحلة</h3><div class="alerts" id="feed"><div class="alert ok">انطلقت الرحلة من ${l.from}<small>قبل قليل</small></div></div></div>
-<button class="btn btn-d" id="sos">🆘 زر الطوارئ</button>
+<div class="card"><h3>🆘 الطوارئ</h3>
+<div class="field"><label>رقم الطوارئ (إسعاف / شرطة) — قابل للضبط</label><input id="emgnum" dir="ltr" placeholder="مثال: 122" style="text-align:right"></div>
+<div class="row"><a class="btn btn-d grow" id="emgcall" href="#">📞 اتصال بالإسعاف/الطوارئ</a><button class="btn btn-d" id="sos">🆘 تنبيه الأهل</button></div>
+<div class="mut" style="font-size:12px;margin-top:6px">الاتصال يشارك موقعك الحالي تلقائيًا (حسب جهازك) — أدخل الرقم أولًا.</div></div>
+<div class="card"><h3>🛡️ فحص الأمان</h3>
+<div class="row"><button class="btn btn-g grow" id="rcsim">محاكاة: توقف مفاجئ ⚠️</button></div>
+<div id="ridecheck" style="display:none;margin-top:10px;text-align:center"><b>هل أنت بخير؟</b><div class="row" style="margin-top:8px"><button class="btn btn-a grow" id="rcok">🟢 بخير</button><button class="btn btn-d grow" id="rchelp">🔴 أحتاج مساعدة</button></div><div class="mut" style="font-size:12px;margin-top:6px">عدم الرد خلال 10 ثوانٍ يُنبّه الأهل تلقائيًا (تجريبي).</div></div></div>
 <div class="row"><a class="btn btn-g grow" href="chat.html?id=${l.id}">💬 دردشة مع السائق</a></div>`;
 const m=K.map("tmap",l.route[0],11);
 function feed(txt,cls=""){const f=$("#feed");f.insertAdjacentHTML("afterbegin",`<div class="alert ${cls}">${txt}<small>الآن</small></div>`)}
@@ -24,4 +30,15 @@ if(m){let mins=9;$("#eta").textContent=mins+" دقائق";
 }else{$("#eta").textContent="غير متاح"}
 $("#sos").onclick=()=>{const r=K.get("reports",[]);r.unshift({id:"r"+Date.now(),line:l.from+" ← "+l.to,cat:"زر الطوارئ",txt:"إرسال الموقع لحظيًا للأهل وجهة الطوارئ",d:"الآن",status:"🚨 بلاغ عالي الأولوية — تم إرسال الموقع للأهل"});K.set("reports",r);
 feed("🚨 تم تفعيل زر الطوارئ — أُرسل موقعك للأهل","bad");K.toast("تم إرسال موقعك للأهل وجهة الطوارئ 🆘")};
+/* §3.14.2 — رقم طوارئ قابل للضبط */
+const emgIn=$("#emgnum");emgIn.value=K.get("emgNum","");
+const setTel=()=>{$("#emgcall").href=emgIn.value.trim()?("tel:"+emgIn.value.trim()):"#"};
+setTel();emgIn.onchange=()=>{K.set("emgNum",emgIn.value.trim());setTel();K.toast("تم حفظ رقم الطوارئ ✓")};
+$("#emgcall").onclick=e=>{if(!emgIn.value.trim()){e.preventDefault();K.toast("أدخل رقم الطوارئ أولًا ⚠️");emgIn.focus()}};
+/* §3.14.6 — فحص الشذوذ RideCheck */
+let rcTimer=null;
+$("#rcsim").onclick=()=>{const rc=$("#ridecheck");rc.style.display="block";feed("⚠️ توقف مفاجئ غير متوقع — جارٍ التحقق من سلامتك","warn");
+clearTimeout(rcTimer);rcTimer=setTimeout(()=>{rc.style.display="none";feed("🚨 لم يرد الراكب خلال 10 ثوانٍ — تم تنبيه الأهل تلقائيًا","bad");K.toast("🚨 تم تنبيه الأهل تلقائيًا")},10000)};
+$("#rcok").onclick=()=>{clearTimeout(rcTimer);$("#ridecheck").style.display="none";feed("🟢 الراكب بخير — متابعة الرحلة","ok")};
+$("#rchelp").onclick=()=>{clearTimeout(rcTimer);$("#ridecheck").style.display="none";$("#sos").click()};
 </script></body></html>

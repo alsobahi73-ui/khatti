@@ -12,6 +12,7 @@ else app.innerHTML=trips.map(t=>{const l=K.tripLine(t);const isHol=!!t.holId;ret
 <div class="row" style="margin-top:8px">
 ${t.status==="upcoming"&&!isHol?`<a class="btn btn-p btn-s" href="tracking.html?id=${l.id}">تتبع</a>`:""}
 ${t.status==="upcoming"&&isHol?`<button class="btn btn-g btn-s" onclick="holDone('${t.id}')">محاكاة انتهاء الرحلة</button>`:""}
+${t.pin&&t.status==="upcoming"?`<div class="card" style="margin:10px 0 0;background:#f7fafc"><b>🎫 رمز الصعود</b><div class="mut" style="font-size:12px">أظهره للسائق عند الصعود — يمنع صعود الباص الخاطئ</div>${K.qrbox(t.pin)}</div>`:""}
 ${t.status==="done"&&!t.rated?`<a class="btn btn-a btn-s" href="rate.html?trip=${t.id}">قيّم الرحلة</a>`:""}
 ${t.status==="done"&&t.rated?`<span class="mut">تم التقييم ✓</span>`:""}
 ${t.status==="done"?`<a class="btn btn-g btn-s" href="report.html?${isHol?"hol="+t.holId:"id="+l.id}">بلاغ مخالفة</a>`:""}

@@ -30,6 +30,7 @@ if(m){let mins=8;$("#peta").textContent=mins+" دقائق";
 K.sim(m,l.route,(ev,left)=>{if(ev==="tick"){$("#peta").textContent=Math.max(1,Math.ceil(left*8))+" دقائق"}else{$("#peta").textContent="وصلت ✓";feed("✅ وصلت زهراء إلى الجامعة","ok")}})}
 setTimeout(()=>feed("✅ صعدت زهراء الباص — 07:02","ok"),1500);
 setTimeout(()=>feed("🚌 الباص في الطريق — خط الكاظمية ← جامعة بغداد"),4000);
+const be=K.get("boardEv",null);if(be)feed("✅ صعد "+K.esc(be.name)+" الباص (تحقق PIN) — "+be.time,"ok");
 $("#d1").onclick=()=>feed("⚠️ تأخير غير معتاد — 12 دقيقة عن الموعد","warn");
 $("#d2").onclick=()=>feed("⚠️ انحراف عن المسار المسجل — جارٍ التحقق","warn");
 $("#d3").onclick=()=>feed("🚨 تنبيه: لم يصعد علي باص اليوم في موعده","bad");
