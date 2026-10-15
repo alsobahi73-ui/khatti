@@ -1,20 +1,20 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>تعديل بيانات الخط — خطي</title><link rel="stylesheet" href="../assets/style.css"></head>
 <body><div class="wrap"><main id="app">
 <div class="card"><h3>⚙️ تعديل بيانات المسار والاشتراك</h3>
-<div class="field"><label>منطقة الانطلاق</label><select id="from"></select></div>
-<div class="field"><label>الوجهة / الجامعة</label><select id="to"></select></div>
+<div class="field"><label for="from">منطقة الانطلاق</label><select id="from"></select></div>
+<div class="field"><label for="to">الوجهة / الجامعة</label><select id="to"></select></div>
 <div class="row">
-  <div class="field grow"><label>وقت الانطلاق (صباحاً)</label><input id="go" type="time" value="07:00"></div>
-  <div class="field grow"><label>وقت العودة (مساءً)</label><input id="back" type="time" value="14:30"></div>
+  <div class="field grow"><label for="go">وقت الانطلاق (صباحاً)</label><input id="go" type="time" value="07:00"></div>
+  <div class="field grow"><label for="back">وقت العودة (مساءً)</label><input id="back" type="time" value="14:30"></div>
 </div>
 <div class="row">
-  <div class="field grow"><label>عدد المقاعد الكلي (1-60)</label><input id="seats" type="number" min="1" max="60"></div>
-  <div class="field grow"><label>المقاعد الشاغرة حالياً</label><input id="free" type="number" min="0" max="60"></div>
+  <div class="field grow"><label for="seats">عدد المقاعد الكلي (1-60)</label><input id="seats" type="number" min="1" max="60"></div>
+  <div class="field grow"><label for="free">المقاعد الشاغرة حالياً</label><input id="free" type="number" min="0" max="60"></div>
 </div>
-<div class="field"><label>سعر الاشتراك الشهري (د.ع)</label><input id="price" type="number" min="0"></div>
-<div class="field"><label>المركبة</label><input id="vehicle" type="text"></div>
-<div class="field"><label>نقاط التجمع (مفصولة بفاصلة)</label><input id="pickups" type="text"></div>
-<div class="field"><label>فئة الخط</label><select id="comp"><option value="girls">طالبات / نسائي فقط</option><option value="mixed">مختلط</option><option value="boys">طلاب / شباب فقط</option></select></div>
+<div class="field"><label for="price">سعر الاشتراك الشهري (د.ع)</label><input id="price" type="number" min="0"></div>
+<div class="field"><label for="vehicle">المركبة</label><input id="vehicle" type="text"></div>
+<div class="field"><label for="pickups">نقاط التجمع (مفصولة بفاصلة)</label><input id="pickups" type="text"></div>
+<div class="field"><label for="comp">فئة الخط</label><select id="comp"><option value="girls">طالبات / نسائي فقط</option><option value="mixed">مختلط</option><option value="boys">طلاب / شباب فقط</option></select></div>
 <button class="btn btn-p" id="save">حفظ التغييرات</button>
 </div>
 </main></div>
@@ -26,7 +26,7 @@
   const l=K.line(MYDRIVER.lineId);
   if(!l){K.missing();return;}
   $("#from").innerHTML=AREAS.map(a=>`<option ${a===l.from?'selected':''}>${K.esc(a)}</option>`).join("");
-  $("#to").innerHTML=AREAS.map(a=>`<option ${a===l.to?'selected':''}>${K.esc(a)}</option>`).join("");
+  $("#to").innerHTML=[...new Set([l.to,...LINES.map(x=>x.to),...AREAS])].map(a=>`<option ${a===l.to?'selected':''}>${K.esc(a)}</option>`).join("");
   $("#go").value=l.go||"07:00";
   $("#back").value=l.back||"14:30";
   $("#price").value=l.price;
@@ -36,9 +36,9 @@
   $("#pickups").value=Array.isArray(l.pickups)?l.pickups.join("، "):"";
   $("#comp").value=l.comp;
   $("#save").onclick=function(){
-    const seats=Number($("#seats").value);
-    const free=Number($("#free").value);
-    const price=Number($("#price").value);
+    const seats=$("#seats").value;
+    const free=$("#free").value;
+    const price=$("#price").value;
     const go=$("#go").value;
     const back=$("#back").value;
     if(!KhattiCore.integer(seats,1,60)){K.toast("عدد المقاعد يجب أن يكون بين 1 و 60");return;}
@@ -46,21 +46,24 @@
     if(!KhattiCore.integer(price,0,10000000)){K.toast("سعر الاشتراك غير صالح");return;}
     if(!KhattiCore.time(go)||!KhattiCore.time(back)){K.toast("يرجى إدخال أوقات صحيحة");return;}
     const pickups=$("#pickups").value.split(/[،,]/).map(s=>s.trim()).filter(Boolean);
+    const localBooked=K.get("bookings",[]).filter(b=>b.lineId===l.id&&b.status==="upcoming").reduce((sum,b)=>sum+(Array.isArray(b.seats)?b.seats.length:1),0);
+    if(Number(free)+localBooked>Number(seats)){K.toast("المقاعد الشاغرة والحجوزات الحالية تتجاوز سعة المركبة");return;}
+    if(!COMP[$("#comp").value]||!pickups.length){K.toast("اختر فئة الخط وأدخل نقطة تجمع واحدة على الأقل");return;}
     const edits=K.get("lineEdits",{});
     edits[l.id]={
       from:$("#from").value,
       to:$("#to").value,
       go,
       back,
-      seats,
-      free,
-      price,
+      seats:Number(seats),
+      free:Number(free)+localBooked,
+      price:Number(price),
       vehicle:$("#vehicle").value.trim()||l.vehicle||"حافلة",
       pickups,
       comp:$("#comp").value
     };
     K.set("lineEdits",edits);
-    K.toast("تم حفظ بيانات الخط بنجاح");
+    K.toast("حُفظت بيانات الخط محليًا فقط");
     setTimeout(()=>location.href="index.html",900);
   };
 })();

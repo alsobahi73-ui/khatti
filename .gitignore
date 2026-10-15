@@ -4,3 +4,6 @@ android/
 ios/
 test-results/
 playwright-report/
+
+# بيانات تطوير خاصة ومفاتيح محلية
+.local-auth/

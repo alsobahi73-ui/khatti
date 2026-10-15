@@ -15,7 +15,7 @@ const K={
         return parsed.filter(v=>{
           if(!KhattiCore.record(v))return false;
           if(k==="trips"||k==="bookings"){
-            return KhattiCore.safeId(v.id)&&typeof v.when==="string"&&["done","upcoming"].includes(v.status)&&(KhattiCore.safeId(v.lineId)||KhattiCore.safeId(v.holId));
+            return (!Array.isArray(v.seats)||(v.seats.length>0&&v.seats.length<=60&&new Set(v.seats).size===v.seats.length&&v.seats.every(x=>typeof x==="string"&&/^مقعد \d{1,2}$/.test(x))))&&KhattiCore.safeId(v.id)&&typeof v.when==="string"&&["done","upcoming"].includes(v.status)&&(KhattiCore.safeId(v.lineId)||KhattiCore.safeId(v.holId));
           }
           if(k==="holPosts"||k==="holReqs"){
             const dlabel=typeof v.dlabel==="string"&&v.dlabel?v.dlabel:(typeof v.date==="string"?v.date:"");
@@ -30,7 +30,7 @@ const K={
   },
   set(k,v){
     try{localStorage.setItem("khatti_demo_v1_"+k,JSON.stringify(v))}
-    catch(e){this.toast("تعذر حفظ البيانات أوفلاين")}
+    catch(e){this.toast("تعذّر الحفظ المحلي؛ لم تكتمل العملية.");throw new Error("تعذر الحفظ المحلي")}
   },
   line(id){
     const l=(typeof LINES!=="undefined"?LINES:[]).find(x=>x.id===id);
@@ -48,10 +48,10 @@ const K={
       if(KhattiCore.integer(e.price,0,10000000))merged.price=Number(e.price);
       if(typeof e.vehicle==="string"&&e.vehicle.trim())merged.vehicle=e.vehicle.trim();
       if(Array.isArray(e.pickups)&&e.pickups.every(p=>typeof p==="string"))merged.pickups=e.pickups;
-      if(Array.isArray(e.comments))merged.comments=e.comments;
+      if(Array.isArray(e.comments))merged.comments=e.comments.filter(KhattiCore.record);
     }
     const savedComments=this.get("myComments",{})[id];
-    if(Array.isArray(savedComments))merged.comments=savedComments;
+    if(Array.isArray(savedComments))merged.comments=savedComments.filter(KhattiCore.record);
     return merged;
   },
   fmt:n=>Number(n).toLocaleString("en")+" د.ع",
@@ -67,12 +67,12 @@ const K={
     const inSub = location.pathname.includes("/driver/")||location.pathname.includes("/passenger/")||location.pathname.includes("/parent/");
     const prefix = inSub ? "../" : "";
     if(role==="driver"){
-      if(!this.get("driver",null))this.set("driver",{id:"d_demo",name:typeof MYDRIVER!=="undefined"?MYDRIVER.name:"أبو محمد الحسني",phone:"07701234567",vehicle:"تويوتا هايس",verified:true});
+      if(!this.get("driver",null)?.verified){location.href=prefix+"register.html?role=driver";return;}
       location.href=prefix+"driver/index.html";
     }else if(role==="parent"){
       location.href=prefix+"parent/index.html";
     }else if(role==="passenger"){
-      if(!this.get("me",null))this.set("me",{id:"p_demo",name:"أحمد علي",phone:"07701112233"});
+      if(!this.get("me",null)){location.href=prefix+"register.html?role=passenger";return;}
       location.href=prefix+"passenger/search.html";
     }else{
       location.href=prefix+"index.html";
@@ -83,7 +83,7 @@ const K={
     const r=this.currentRole();
     document.body.insertAdjacentHTML("afterbegin",`
       <header class="app">
-        ${back?`<a class="bk" href="${this.esc(back)}">←</a>`:""}
+        ${back?`<a class="bk" aria-label="رجوع" href="${this.esc(back)}">←</a>`:""}
         <h1>${this.esc(t)}</h1>
         <select class="role-switch" aria-label="تبديل الوضع" onchange="K.switchRole(this.value)">
           <option value="passenger" ${r==="passenger"?"selected":""}>👤 وضع الراكب</option>
@@ -118,7 +118,7 @@ const K={
       items=[
         {href:"index.html",icon:"👨‍👩‍👧",label:"متابعة الأبناء",act:true},
         {href:"../passenger/tracking.html?id=l1",icon:"📍",label:"خريطة الحافلة",act:false},
-        {href:"../passenger/chat.html?id=l1",icon:"💬",label:"محادثة السائق",act:false}
+        {href:"../support.html",icon:"💬",label:"الدعم",act:false}
       ];
     }
     if(!items.length)return;
@@ -130,7 +130,7 @@ const K={
   },
   toast(m,ms=2800){
     let t=$("#toast");
-    if(!t){t=document.createElement("div");t.id="toast";t.className="toast";document.body.appendChild(t)}
+    if(!t){t=document.createElement("div");t.id="toast";t.className="toast";t.setAttribute("role","status");t.setAttribute("aria-live","polite");t.setAttribute("aria-atomic","true");document.body.appendChild(t)}
     t.textContent=m;
     t.style.display="block";
     clearTimeout(t._x);
@@ -142,13 +142,13 @@ const K={
     return `<span class="stars">${s}</span>`;
   },
   badge(c){
-    if(c==="verified")return `<span class="trusted">✓ سائق موثّق</span>`;
+    if(c==="verified")return `<span class="trusted">🧪 توثيق تجريبي</span>`;
     const cls={girls:"b-g",boys:"b-b",mixed:"b-m"}[c]||"b-m";
     return `<span class="badge ${cls}">${this.esc(COMP[c]||c)}</span>`;
   },
   trusted(l){
     const isTrusted=KhattiCore.record(l)?Boolean(l.trusted||l.verified):Boolean(l);
-    return isTrusted?`<span class="trusted">✓ سائق موثّق</span>`:"";
+    return isTrusted?`<span class="trusted">🧪 توثيق تجريبي</span>`:"";
   },
   lineCard(l){
     return `<a class="card linecard" href="line.html?id=${this.esc(l.id)}"><div class="top">${this.badge(l.comp)}${this.trusted(l)}</div><div class="route">${this.esc(l.from)} ← ${this.esc(l.to)}</div><div class="mut">${this.esc(l.driver||l.driverName||"")} • ${this.esc(l.vehicle||l.type||"")} • 🚦 ${this.esc(l.go||"07:00")} / 🏁 ${this.esc(l.back||"14:30")}</div><div class="meta"><span>${this.stars(l.rating)} ${l.rating} (${l.rc||0})</span><span>💺 ${l.free} مقاعد شاغرة</span><span>${this.fmt(l.price)}/شهر</span></div></a>`;
@@ -169,7 +169,7 @@ const K={
     const today=KhattiCore.today();
     const key="att_"+lineId+"_"+today;
     const saved=this.get(key,null);
-    if(Array.isArray(saved))return saved;
+    if(Array.isArray(saved))return saved.filter(s=>KhattiCore.record(s)&&KhattiCore.safeId(s.id)&&KhattiCore.name(s.name)&&["waiting","absent","boarded","arrived"].includes(s.status));
     const me=this.get("me",{name:"أحمد علي",phone:"07701112233"});
     const initial=[
       {id:"st_1",name:me.name||"أحمد علي",stop:"تقاطع الكرادة",status:"waiting",code:KhattiCore.parentCode(me.phone)},
@@ -180,11 +180,12 @@ const K={
     return initial;
   },
   setStudentStatus(lineId,studentId,status){
+    if(!["waiting","absent","boarded","arrived"].includes(status)||!this.line(lineId))throw new Error("حالة حضور غير صالحة");
     const today=KhattiCore.today();
     const key="att_"+lineId+"_"+today;
     const list=this.attendance(lineId).map(s=>s.id===studentId?{...s,status,updatedAt:new Date().toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"})}:s);
-    this.set(key,list);
     const target=list.find(s=>s.id===studentId);
+    if(!target)throw new Error("الطالب غير موجود");
     if(target){
       const labels={
         absent:`تم تسجيل غياب (${target.name}) عن رحلة اليوم — لن ينتظرك السائق صباحاً`,
@@ -196,15 +197,15 @@ const K={
       const broadcasts=this.get("broadcasts",[]);
       const now=new Date().toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"});
       broadcasts.unshift({id:"b_"+Date.now(),msg,t:msg,time:now,d:now});
-      this.set("broadcasts",broadcasts);
-      this.toast(msg);
+      this.commit({[key]:list,broadcasts});
+      this.toast("محاكاة محلية: "+msg+"؛ لم يُرسل إشعار");
     }
     return list;
   },
   map(id,center,zoom=12){
     const el=document.getElementById(id);
     if(!el)return null;
-    const fb=()=>{el.innerHTML='<div class="mapfb" id="map-fallback">خريطة تفاعلية توضيحية لخط سير الرحلة (وضع عدم الاتصال)</div>'};
+    const fb=()=>{el.innerHTML='<div class="mapfb" id="map-fallback">تعذّر تحميل الخريطة؛ تحقق من الاتصال بالإنترنت</div>'};
     if(typeof L==="undefined"){fb();return null}
     try{
       const m=L.map(id,{zoomControl:true}).setView(center,zoom);
@@ -233,7 +234,7 @@ const K={
         const rem=1-i/pts.length;
         if(!alerted&&rem<=0.35){
           alerted=true;
-          this.toast("🔔 تنبيه اقتراب: الحافلة على بُعد أقل من 5 دقائق من محطتك!");
+          this.toast("🔔 محاكاة تنبيه اقتراب؛ لا يوجد تتبع لحافلة حقيقية");
         }
         onEv&&onEv("tick",rem);
       },900);
@@ -243,7 +244,7 @@ const K={
   dist:(a,b)=>KhattiCore.dist(a,b),
   esc:s=>KhattiCore.esc(s),
   /* §3.14.1+8 — رمز صعود QR/PIN */
-  qrbox(pin){pin=String(pin||"");let c="";for(let i=0;i<81;i++){c+=`<i class="${(pin.charCodeAt(i%pin.length)*7+i*13)%3===0?"on":""}"></i>`}return `<div class="qrbox">${c}</div><div class="pinbig">${pin.split("").join(" ")}</div>`},
+  qrbox(pin){pin=/^\d{4,6}$/.test(String(pin))?String(pin):"----";let c="";for(let i=0;i<81;i++){c+=`<i class="${(pin.charCodeAt(i%pin.length)*7+i*13)%3===0?"on":""}"></i>`}return `<div class="qrbox">${c}</div><div class="pinbig">${this.esc(pin.split("").join(" "))}</div>`},
   pphone(){const m=this.get("me",null);return m&&m.phone?m.phone:""},
   /* §3.14.3 — قاموس كردي (سوراني) للواجهة الرئيسية */
   dict:{
@@ -273,9 +274,9 @@ Object.assign(K,{
     const free=this.holFree(h);
     const dlabel=h.dlabel||h.date||"";
     const driver=h.driver||h.driverName||"";
-    return `<div class="card"><div class="row">${this.badge(h.comp)}${h.trusted?`<span class="trusted">✓ سائق موثّق</span>`:""}<span class="grow"></span><b>${this.fmt(h.price)}</b></div><div class="route" style="font-weight:800;margin:6px 0">${this.esc(h.from)} ← ${this.esc(h.to)}</div><div class="mut">📅 ${this.esc(dlabel)} — 🕒 ${this.esc(h.time)} • ${this.esc(driver)} ${h.rc?this.stars(h.rating):""}</div>${h.note?`<div class="mut" style="margin-top:4px">📝 ${this.esc(h.note)}</div>`:""}<div class="row" style="margin-top:8px"><span>💺 <b>${free}</b> مقاعد متبقية</span><span class="grow"></span>${free>0?`<button class="btn btn-a" onclick="${bookFn}('${encodeURIComponent(h.id)}')">حجز الآن ✓</button>`:`<button class="btn" disabled>مكتمل</button>`}</div></div>`;
+    return `<div class="card"><div class="row">${this.badge(h.comp)}${h.trusted?`<span class="trusted">🧪 توثيق تجريبي</span>`:""}<span class="grow"></span><b>${this.fmt(h.price)}</b></div><div class="route" style="font-weight:800;margin:6px 0">${this.esc(h.from)} ← ${this.esc(h.to)}</div><div class="mut">📅 ${this.esc(dlabel)} — 🕒 ${this.esc(h.time)} • ${this.esc(driver)} ${h.rc?this.stars(h.rating):""}</div>${h.note?`<div class="mut" style="margin-top:4px">📝 ${this.esc(h.note)}</div>`:""}<div class="row" style="margin-top:8px"><span>💺 <b>${free}</b> مقاعد متبقية</span><span class="grow"></span>${free>0?`<button class="btn btn-a" onclick="${bookFn}('${encodeURIComponent(h.id)}')">حجز الآن ✓</button>`:`<button class="btn" disabled>مكتمل</button>`}</div></div>`;
   },
-  holMatch(an,rq){return an.from===rq.from&&an.to===rq.to&&an.date===rq.date&&(rq.comp==="mixed"||an.comp==="mixed"||an.comp===rq.comp)},
+  holMatch(an,rq){return an.from===rq.from&&an.to===rq.to&&an.date===rq.date&&an.comp===rq.comp&&KhattiCore.integer(rq.seats,1,this.holFree(an))&&KhattiCore.future(an.date,an.time)},
   tripLine(t){return t.holId?this.hol(t.holId):this.line(t.lineId)},
   pname(){const m=this.get("me",null);return m?m.name:(typeof ME!=="undefined"?ME.name:"أحمد علي")},
   dname(){const d=this.get("driver",null);return d?d.name:(typeof MYDRIVER!=="undefined"?MYDRIVER.name:"أبو محمد الحسني")},
@@ -324,13 +325,13 @@ const baseLine=K.line.bind(K);
 K.line=function(id){
   const l=baseLine(id);
   if(!l)return null;
-  const used=this.get("bookings",[]).filter(b=>b.lineId===id&&b.status==="upcoming").length;
+  const used=this.get("bookings",[]).filter(b=>b.lineId===id&&b.status==="upcoming").reduce((sum,b)=>sum+(Array.isArray(b.seats)?b.seats.length:1),0);
   const baseFree=KhattiCore.integer(l.free,0,l.seats)?l.free:l.seats;
   return {...l,free:Math.max(0,baseFree-used)};
 };
 K.missing=function(){
   const el=document.querySelector("#app");
-  if(el)el.innerHTML='<div class="bigempty">الخط غير موجود أو الصفحة المطلوبة غير متوفرة في هذا العرض التجريبي.<br><a class="btn btn-p" href="'+(location.pathname.includes("/driver/")?'index.html':'search.html')+'">الرجوع</a></div>';
+  if(el)el.innerHTML='<div class="bigempty">العنصر غير موجود أو الصفحة المطلوبة غير متوفرة في هذا العرض التجريبي.<br><a class="btn btn-p" href="'+(location.pathname.includes("/driver/")?'index.html':'search.html')+'">الرجوع</a></div>';
 };
 try{if(typeof seedDemo==="function")seedDemo()}catch(e){}
 document.addEventListener("DOMContentLoaded",()=>{
@@ -339,7 +340,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     const n=document.createElement("div");
     n.className="note";
     n.id="demo-notice";
-    n.textContent=(K.get("lang","ar")==="ku"&&K.dict)?K.dict.demoNotice:"🧪 وضع العرض التجريبي (v0.2): جميع البيانات محفوظة محلياً في المتصفح مع دعم التبديل الفوري للأدوار.";
+    n.textContent=(K.get("lang","ar")==="ku"&&K.dict)?K.dict.demoNotice:"🧪 عرض تجريبي محلي: لا توثيق أمني أو حجز فعلي أو دفع أو تتبع حقيقي. لا تُرسل رسائل أو بلاغات أو استغاثات. لا تدخل بيانات شخصية حقيقية.";
     main.before(n);
   }
   if(typeof navigator!=="undefined"&&"serviceWorker" in navigator){
@@ -348,7 +349,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   }
 });
 if(typeof window!=="undefined"){
-  window.addEventListener("error",e=>K.toast(e.message&&e.message.includes("localStorage")?"تعذر الوصول للحافظة":"حدث خطأ غير متوقع في المنصة."));
+  window.addEventListener("error",e=>K.toast(e.message&&(/تعذر الحفظ|تعذر حفظ|localStorage/.test(e.message))?"تعذّر الحفظ المحلي؛ لم تكتمل العملية. تحقق من التخزين.":"حدث خطأ غير متوقع في المنصة."));
 }
 
 K.commit=function(entries){
@@ -363,6 +364,6 @@ K.commit=function(entries){
         else localStorage.setItem("khatti_demo_v1_"+key,value);
       }
     }catch(_){}
-    throw new Error("تعذر حفظ البيانات");
+    throw new Error("تعذر الحفظ المحلي");
   }
 };

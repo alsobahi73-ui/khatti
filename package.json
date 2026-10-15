@@ -5,7 +5,8 @@
     "@capacitor/cli": "^7.0.0",
     "@capacitor/core": "^7.0.0",
     "@capacitor/ios": "^7.0.0",
-    "@playwright/test": "^1.64.0"
+    "@playwright/test": "^1.64.0",
+    "leaflet": "1.9.4"
   },
   "name": "khatti",
   "private": true,

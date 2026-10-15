@@ -21,7 +21,7 @@
         <p style="margin:4px 0;">"${K.esc(c.t)}"</p>
         ${c.r ? `<div class="note" style="margin-top:6px;background:#f0fdf4;"><strong>ردك:</strong> ${K.esc(c.r)}</div>` : `
           <div style="margin-top:6px;">
-            <input id="reply-${i}" placeholder="اكتب ردك على هذا التقييم..." style="width:70%;display:inline-block;padding:6px;">
+            <input aria-label="رد تجريبي على التقييم ${i+1}" id="reply-${i}" placeholder="اكتب ردك على هذا التقييم..." style="width:70%;display:inline-block;padding:6px;">
             <button class="btn btn-p" onclick="sendReply(${i})" style="width:25%;display:inline-block;">رد</button>
           </div>
         `}
@@ -40,7 +40,7 @@
     const allComments=K.get("myComments",{});
     allComments[l.id]=comments;
     K.set("myComments",allComments);
-    K.toast("تم إرسال الرد بنجاح");
+    K.toast("حُفظ الرد محليًا للتجربة؛ لم يُرسل");
     render();
   };
 

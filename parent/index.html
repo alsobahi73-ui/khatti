@@ -10,24 +10,25 @@
   function render(){
     const att=K.attendance(d.lineId||"l1");
     const savedCode=K.get("parent_linked_code",att[0]?att[0].code:"KH-2233");
-    const child=att.find(s=>s.code===savedCode)||att[0];
+    const child=att.find(s=>s.code===savedCode);
     const broadcasts=K.get("broadcasts",[]);
-    /* §3.14.1 — إشعار صعود عبر تحقق PIN (لمرة واحدة) */
+    /* §3.14.1 — إشعار صعود عبر محاكاة PIN (لمرة واحدة) */
     const be=K.get("boardEv",null);
     if(be&&be.name){
-      broadcasts.unshift({id:"b_"+Date.now(),msg:"✅ صعد "+be.name+" الباص (تحقق PIN)",time:be.time||"الآن",d:be.time||"الآن"});
+      broadcasts.unshift({id:"b_"+Date.now(),msg:"✅ صعد "+be.name+" الباص (محاكاة PIN)",time:be.time||"الآن",d:be.time||"الآن"});
       K.set("broadcasts",broadcasts);
       K.set("boardEv",null);
     }
 
+    if(!child){$("#app").innerHTML='<div class="card">لا يوجد طالب تجريبي مطابق للكود المحفوظ. <button id="reset-code" class="btn btn-g">اختيار نموذج تجريبي</button></div>';$("#reset-code").onclick=()=>{if(att.length){K.set("parent_linked_code",att[0].code);render()}else{K.toast("لا توجد بيانات طلاب متاحة")}};return}
     $("#app").innerHTML=`
-      <div class="card">
+      <p class="note">بوابة تجريبية محلية: الأكواد ليست مصادقة أمنية، والحالات والتنبيهات لا تتزامن بين الأجهزة ولا تثبت صعودًا فعليًا.</p><div class="card">
         <h3>🔐 ربط حساب الابن / الابنة عبر الكود الخاص</h3>
         <div class="row" style="gap:8px;">
-          <input id="pcode-in" value="${K.esc(savedCode)}" placeholder="مثال: KH-4829" style="flex:1;">
+          <input aria-label="كود الطالب التجريبي" id="pcode-in" value="${K.esc(savedCode)}" placeholder="مثال: KH-4829" style="flex:1;">
           <button class="btn btn-p" id="link-btn">ربط ومتابعة</button>
         </div>
-        <div class="mut" style="margin-top:4px;">أكواد تجريبية متاحة: <code>${att.map(x=>x.code).join("</code> ، <code>")}</code></div>
+        <div class="mut" style="margin-top:4px;">أكواد تجريبية متاحة: <code>${att.map(x=>K.esc(x.code)).join("</code> ، <code>")}</code></div>
       </div>
 
       <div class="card" style="border:2px solid #123a5c;">
@@ -41,7 +42,7 @@
         <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;">
           <a class="btn btn-p" href="../passenger/tracking.html?id=${K.esc(d.lineId||'l1')}">📍 تتبع الحافلة على الخريطة</a>
           <button class="btn btn-a" id="parent-skip-btn">
-            ${child.status==="absent"?"↩️ إلغاء غياب اليوم":"✋ إبلاغ السائق بغياب ابني اليوم"}
+            ${child.status==="absent"?"↩️ إلغاء غياب اليوم":"✋ تسجيل غياب تجريبي محلي"}
           </button>
         </div>
       </div>
@@ -55,7 +56,7 @@
       </div>
 
       <div class="card">
-        <h3>📢 سجل الإشعارات الفورية وحركة الصعود</h3>
+        <h3>📢 سجل التنبيهات التجريبية المحلية</h3>
         ${broadcasts.length===0?'<div class="mut">لا توجد إشعارات حديثة.</div>':broadcasts.map(b=>`
           <div class="note" style="margin-bottom:8px;">
             <strong>📢 ${K.esc(b.time||b.d||"الآن")}:</strong> ${K.esc(b.msg||b.t||"")}
@@ -66,8 +67,9 @@
 
     $("#link-btn").onclick=function(){
       const v=$("#pcode-in").value.trim().toUpperCase();
+      if(!att.some(student=>student.code===v)){K.toast("الكود غير موجود؛ لم يتغير الطالب المتابع");return}
       K.set("parent_linked_code",v);
-      K.toast("تم تحديث ربط كود الطالب: "+v);
+      K.toast("تم اختيار الطالب التجريبي محليًا: "+v);
       render();
     };
 

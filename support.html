@@ -4,25 +4,25 @@
 <main>
 <div class="card"><h3>❓ أسئلة شائعة</h3><div id="faq"></div></div>
 <div class="card"><h3>📩 راسلنا</h3>
-<div class="field"><label>الاسم</label><input id="sname" placeholder="اسمك"></div>
-<div class="field"><label>نوع الاستفسار</label><select id="stopic"><option>حجز ومقاعد</option><option>الدفع</option><option>بلاغ عن مخالفة</option><option>اقتراح ميزة</option><option>أخرى</option></select></div>
-<div class="field"><label>رسالتك</label><textarea id="smsg" placeholder="اكتب رسالتك هنا..."></textarea></div>
-<button class="btn btn-p" id="send">إرسال الرسالة</button>
-<div class="note" id="sok" style="display:none">✅ وصلت رسالتك — سيتواصل معك فريق الدعم قريبًا.</div>
-<div class="note">💡 في النسخة الحقيقية تُرسل الرسائل مباشرة لقناة دعم التطبيق على تيليغرام.</div>
+<div class="field"><label for="sname">الاسم</label><input id="sname" placeholder="اسمك"></div>
+<div class="field"><label for="stopic">نوع الاستفسار</label><select id="stopic"><option>حجز ومقاعد</option><option>الدفع</option><option>بلاغ عن مخالفة</option><option>اقتراح ميزة</option><option>أخرى</option></select></div>
+<div class="field"><label for="smsg">رسالتك</label><textarea id="smsg" placeholder="اكتب رسالتك هنا..."></textarea></div>
+<button class="btn btn-p" id="send">حفظ رسالة تجريبية</button>
+<div class="note" id="sok" style="display:none">حُفظت الرسالة محليًا للتجربة فقط؛ لم تُرسل إلى فريق دعم.</div>
+<div class="note">عرض تجريبي؛ لا توجد قناة دعم مرتبطة بهذه الصفحة حاليًا.</div>
 </div>
 <a class="btn btn-g" href="index.html">→ رجوع للرئيسية</a>
 </main><footer class="app">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
 </div>
 <script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
 <script>
-const FAQ=[["كيف أحجز مقعدًا؟","من واجهة الراكب ← ابحث عن خط ← اختر الخط ← احجز (يومي، أسبوعي، دفتر 10 رحلات، شهري، أو شهري بخصم طلاب)."],["كيف أدفع؟","كاش للسائق، أو دفع مسبق عبر Zain Cash / آسيا حوالة من داخل التطبيق."],["كيف يتابعني أهلي؟","من حسابك انسخ رابط الأهل الثابت وأرسله لهم عبر واتساب — يعمل من المتصفح بلا تثبيت."],["كيف أبلّغ عن مخالفة؟","من صفحة البلاغ: اختر نوع المخالفة وأرفق دليلًا — البلاغ مربوط برحلتك فقط."],["أنا سائق، كيف أسجّل خطي؟","سجّل حساب سائق ← أكمل توثيق المركبة ← بعد المراجعة البشرية تنشر خطك."]];
+const FAQ=[["كيف أحجز مقعدًا؟","من واجهة الراكب ← ابحث عن خط ← اختر الخط ← احجز (يومي، أسبوعي، دفتر 10 رحلات، شهري، أو شهري بخصم طلاب)."],["كيف أدفع؟","خيارات الدفع معروضة للتجربة فقط؛ لا توجد خدمة دفع مرتبطة حاليًا."],["كيف يتابعني أهلي؟","بوابة الأهل الحالية محاكاة على الجهاز نفسه؛ لا يوجد ربط موثق أو مشاركة فعلية بين الهواتف."],["كيف أبلّغ عن مخالفة؟","يمكن حفظ بلاغ تجريبي محلي عن رحلة تجريبية مكتملة؛ لا يُرسل إلى مراجعين."],["أنا سائق، كيف أسجّل خطي؟","التسجيل والتوثيق والنشر حاليًا محاكاة محلية؛ لا توجد مراجعة وثائق بشرية مرتبطة بالتطبيق."]];
 document.getElementById("faq").innerHTML=FAQ.map((f,i)=>`<div class="card" style="margin:8px 0;padding:10px"><b style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display=='none'?'block':'none'">▸ ${f[0]}</b><div style="display:none;margin-top:6px;font-size:14px">${f[1]}</div></div>`).join("");
 const me=K.get("me",null);if(me)document.getElementById("sname").value=me.name||"";
 document.getElementById("send").onclick=()=>{
 const n=document.getElementById("sname").value.trim(),m=document.getElementById("smsg").value.trim();
 if(!n||!m){alert("اكتب اسمك ورسالتك أولًا");return}
-const box=K.get("support_msgs",[]);box.push({name:n,topic:document.getElementById("stopic").value,msg:m,at:new Date().toISOString()});K.set("support_msgs",box);
+const box=K.get("support_msgs",[]);box.push({name:n,topic:document.getElementById("stopic").value,msg:m,at:new Date().toISOString()});try{K.set("support_msgs",box)}catch(e){return}
 document.getElementById("smsg").value="";document.getElementById("sok").style.display="block";};
 </script>
 </body></html>
