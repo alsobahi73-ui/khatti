@@ -1,7 +1,7 @@
 /* ينسخ ملفات الويب إلى www/ لتغليفها بـ Capacitor — يعمل على أي نظام */
 const fs = require("fs"), path = require("path");
 const root = path.join(__dirname, ".."), out = path.join(root, "www");
-const items = ["index.html", "manifest.json", "register.html", "assets", "passenger", "driver", "parent"];
+const items = ["index.html", "manifest.json", "register.html", "support.html", "assets", "passenger", "driver", "parent"];
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 function cp(s, d) {

@@ -1,8 +1,8 @@
 /* خطّي — دوال مشتركة */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const K={
-get(k,f){try{const v=localStorage.getItem("khatti_"+k);return v!==null?JSON.parse(v):f}catch(e){return f}},
-set(k,v){try{localStorage.setItem("khatti_"+k,JSON.stringify(v))}catch(e){}},
+get(k,f){try{const v=localStorage.getItem("khatti_demo_v1_"+k);return v!==null?JSON.parse(v):f}catch(e){return f}},
+set(k,v){try{localStorage.setItem("khatti_demo_v1_"+k,JSON.stringify(v))}catch(e){}},
 line(id){const l=LINES.find(x=>x.id===id);const e=this.get("lineEdits",{})[id];return e?Object.assign({},l,e):Object.assign({},l)},
 fmt:n=>Number(n).toLocaleString("en")+" د.ع",
 comp:c=>COMP[c]||c,
@@ -52,6 +52,7 @@ ${free>0?`<button class="btn btn-a" onclick="${bookFn}('${h.id}')">احجز مق
 holMatch(an,rq){return an.from===rq.from&&an.to===rq.to&&an.date===rq.date&&(rq.comp==="mixed"||an.comp==="mixed"||an.comp===rq.comp)},
 tripLine(t){return t.holId?this.hol(t.holId):this.line(t.lineId)},
 pname(){const m=this.get("me",null);return m?m.name:ME.name},
+pphone(){const m=this.get("me",null);return m&&m.phone?m.phone:""},
 dname(){const d=this.get("driver",null);return d?d.name:MYDRIVER.name},
 pushHolNotif(msg,link){const n=this.holNotifs();if(n.some(x=>x.msg===msg))return;n.unshift({msg,link,d:"الآن"});this.set("holNotifs",n)},
 holNotifs(){return this.get("holNotifs",[])},
@@ -62,4 +63,13 @@ box.addEventListener("click",e=>{const a=e.target.closest(".alert");if(!a)return
 const cur=this.get("holNotifs",[]);const rm=cur.splice(i,1)[0];this.set("holNotifs",cur);a.remove();
 if(rm&&rm.link)location.href=rm.link});
 app.prepend(box)}
+});
+
+/* تنبيه تجريبي دائم — يظهر أعلى كل صفحة (يتوقعه اختبار #demo-notice) */
+document.addEventListener("DOMContentLoaded",()=>{
+if(document.getElementById("demo-notice"))return;
+const n=document.createElement("div");n.id="demo-notice";
+n.style.cssText="background:#fff8ea;border-bottom:2px solid #e09a12;color:#7a5200;font-size:12px;text-align:center;padding:6px 10px;line-height:1.7";
+n.textContent="🧪 نسخة تجريبية — جميع البيانات والأشخاص والأرقام وهمية لغرض العرض فقط";
+document.body.prepend(n);
 });

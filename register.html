@@ -7,7 +7,7 @@ const app=$("#app");
 const role0=new URLSearchParams(location.search).get("role");
 const me=K.get("me",null),dv=K.get("driver",null);
 let role=role0||"",codeSent=false,codeOk=false,vcodeSent=false,vcodeOk=false;
-let pN="",pP="",dN="",dP="";
+let pN=K.get("draft_pN",""),pP=K.get("draft_pP",""),dN=K.get("draft_dN",""),dP=K.get("draft_dP","");
 
 if(me){app.innerHTML=`<div class="ok-note">✓ لديك حساب راكب مسجل: <b>${K.esc(me.name)}</b></div>
 <a class="btn btn-p" href="passenger/search.html">متابعة إلى التطبيق ←</a>
@@ -42,6 +42,7 @@ if(role==="passenger"){f.innerHTML=`
 $("#psend").onclick=()=>{pN=$("#pname").value;pP=$("#pphone").value;
 if(!pN.trim()){K.toast("أدخل الاسم");return}
 if(!/^07\d{9}$/.test(pP.trim())){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return}
+K.set("draft_pN",pN);K.set("draft_pP",pP);
 codeSent=true;renderForm();K.toast("تم إرسال الرمز 📲")};
 const pv=$("#pverify");if(pv)pv.onclick=()=>{if(!/^\d{4}$/.test($("#pcode").value.trim())){K.toast("الرمز 4 أرقام (تجريبي: أي 4 أرقام)");return}
 codeOk=true;renderForm();K.toast("تم التحقق ✓")};
@@ -67,6 +68,7 @@ $("#vlic").onchange=e=>{if(e.target.files[0])$("#licname").textContent="✓ تم
 $("#dsend").onclick=()=>{dN=$("#dname").value;dP=$("#dphone").value;
 if(!dN.trim()){K.toast("أدخل الاسم");return}
 if(!/^07\d{9}$/.test(dP.trim())){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return}
+K.set("draft_dN",dN);K.set("draft_dP",dP);
 vcodeSent=true;renderForm();K.toast("تم إرسال الرمز 📲")};
 const vv=$("#vverify");if(vv)vv.onclick=()=>{if(!/^\d{4}$/.test($("#vcode").value.trim())){K.toast("الرمز 4 أرقام (تجريبي: أي 4 أرقام)");return}
 vcodeOk=true;renderForm();K.toast("تم التحقق ✓")};
@@ -74,15 +76,16 @@ const dd=$("#ddone");if(dd)dd.onclick=()=>{const yr=+$("#vyear").value,seats=+$(
 if(!$("#vplate").value.trim()){K.toast("أدخل رقم اللوحة");return}
 if(!(yr>=1990&&yr<=2026)){K.toast("سنة الصنع غير صحيحة");return}
 if(!(seats>=4&&seats<=60)){K.toast("عدد المقاعد بين 4 و 60");return}
-if(!$("#vlic").files.length){K.toast("أرفق صورة إجازة السوق");return}
+const licFile=$("#vlic").files[0];
 K.set("driver",{name:$("#dname").value.trim(),phone:$("#dphone").value.trim(),role:"driver",verified:false,
-vehicle:{type:$("#vtype").value,plate:$("#vplate").value.trim(),year:yr,seats,lic:$("#vlic").files[0].name}});
+vehicle:{type:$("#vtype").value,plate:$("#vplate").value.trim(),year:yr,seats,lic:licFile?licFile.name:null}});
 waiting()}}}
 function waiting(){const d=K.get("driver",null);if(!d){location.href="register.html";return}
 app.innerHTML=`<div class="card" style="text-align:center;padding:30px 14px"><div style="font-size:50px">⏳</div>
 <h3>حسابك قيد المراجعة البشرية</h3>
 <p class="mut" style="line-height:1.9;margin:8px 0">أهلًا <b>${K.esc(d.name)}</b> — استلمنا بياناتك وبيانات المركبة (${K.esc(d.vehicle.type)} — لوحة ${K.esc(d.vehicle.plate)}).<br>
 لن تُنشر خطوطك أو إعلاناتك حتى تُراجَع وتُقبَل.<br>يصلك إشعار فور القبول — عادة خلال 24 ساعة.</p>
+${d.vehicle.lic?`<div class="ok-note" style="text-align:right">✓ صورة الإجازة مرفقة: ${K.esc(d.vehicle.lic)}</div>`:`<div class="note" style="text-align:right">⚠️ لم تُرفق صورة إجازة السوق (تجريبي) — ستُطلب عند التفعيل الحقيقي.</div>`}
 <div class="ok-note" style="text-align:right">🧪 <b>وضع تجريبي:</b> زر المحاكاة أدناه يمثّل قرار المراجع البشري.</div>
 <button class="btn btn-a" id="simok">محاكاة قبول المراجعة ✓</button>
 <button class="btn btn-g" onclick="K.set('driver',null);location.href='register.html'">إلغاء التسجيل</button></div>`;

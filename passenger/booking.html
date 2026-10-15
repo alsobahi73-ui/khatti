@@ -15,7 +15,7 @@ app.innerHTML=`
 <label class="radio" data-t="day"><input type="radio" name="t"> مقعد يومي — ${K.fmt(l.day)}</label>
 <label class="radio on" data-t="month"><input type="radio" name="t" checked> اشتراك شهري — ${K.fmt(l.price)}</label>
 <div class="field" style="margin-top:10px"><label>الاسم</label><input id="nm" value="${K.pname()}"></div>
-<div class="field"><label>رقم الهاتف</label><input id="ph" value="0770 000 0000" dir="ltr" style="text-align:right"></div></div>
+<div class="field"><label>رقم الهاتف</label><input id="ph" value="${K.pphone()}" dir="ltr" style="text-align:right"></div></div>
 <div class="card"><h3>طريقة الدفع</h3>
 <label class="radio on" data-p="cash"><input type="radio" name="p" checked> 💵 كاش — أدفع للسائق مباشرة</label>
 <label class="radio" data-p="zain"><input type="radio" name="p"> 📱 Zain Cash — دفع مسبق (سيصلك رقم المحفظة بعد التأكيد)</label>
