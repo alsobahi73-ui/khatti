@@ -1,0 +1,36 @@
+/* === تحسينات خطّي v0.2: شريط سفلي، مخطط مقاعد، OTP، خط زمني، وبطاقة QR === */
+body { padding-bottom: 72px; }
+header.app { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#123a5c; color:#fff; position:sticky; top:0; z-index:50; }
+header.app h1 { font-size:16px; margin:0; flex:1; }
+header.app .bk { color:#fff; text-decoration:none; font-size:18px; padding:2px 8px; background:rgba(255,255,255,0.15); border-radius:8px; }
+.role-switch { background:rgba(255,255,255,0.18); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:8px; padding:4px 8px; font-size:12px; cursor:pointer; }
+.role-switch option { color:#123a5c; background:#fff; }
+
+.bottom-nav { position:fixed; bottom:0; right:0; left:0; background:#ffffff; border-top:1px solid #e2e8f0; display:flex; justify-content:space-around; padding:6px 4px; z-index:60; box-shadow:0 -2px 10px rgba(0,0,0,0.06); }
+.bottom-nav a { flex:1; text-align:center; text-decoration:none; color:#64748b; font-size:11px; display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 2px; border-radius:8px; font-weight:600; }
+.bottom-nav a.active { color:#123a5c; background:#f1f5f9; font-weight:800; }
+.bottom-nav a i { font-style:normal; font-size:17px; }
+
+.otp-boxes { display:flex; gap:10px; justify-content:center; direction:ltr; margin:12px 0; }
+.otp-boxes input { width:48px; height:52px; text-align:center; font-size:20px; font-weight:800; border:2px solid #cbd5e1; border-radius:10px; }
+.otp-boxes input:focus { border-color:#123a5c; outline:none; background:#f8fafc; }
+
+.seat-map { background:#f8fafc; border:2px solid #e2e8f0; border-radius:14px; padding:14px; margin:10px 0; }
+.seat-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; max-width:240px; margin:0 auto; }
+.seat-btn { padding:10px 6px; border-radius:8px; border:1.5px solid #cbd5e1; background:#fff; cursor:pointer; font-weight:700; font-size:12px; text-align:center; }
+.seat-btn.taken { background:#e2e8f0; color:#94a3b8; cursor:not-allowed; text-decoration:line-through; }
+.seat-btn.selected { background:#123a5c; color:#fff; border-color:#123a5c; }
+.seat-btn.driver-seat { background:#fef3c7; color:#92400e; border-color:#f59e0b; cursor:default; }
+
+.stepper { border-right:3px solid #123a5c; margin:10px 12px 10px 0; padding-right:14px; }
+.step-item { position:relative; margin-bottom:14px; }
+.step-item::before { content:""; position:absolute; right:-21px; top:4px; width:11px; height:11px; border-radius:50%; background:#fff; border:3px solid #123a5c; }
+.step-item.done::before { background:#10b981; border-color:#10b981; }
+.step-time { font-size:12px; color:#64748b; font-weight:700; }
+.step-name { font-size:14px; font-weight:800; color:#1e293b; }
+
+.qr-pass { border:2px dashed #123a5c; border-radius:12px; padding:12px; background:#f8fafc; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; }
+.qr-box { width:68px; height:68px; background:repeating-linear-gradient(45deg,#123a5c 0,#123a5c 6px,#fff 6px,#fff 12px); border:3px solid #123a5c; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:11px; text-shadow:0 1px 2px #000; }
+.plan-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:8px 0; }
+.plan-card { border:2px solid #e2e8f0; border-radius:10px; padding:8px; text-align:center; cursor:pointer; background:#fff; }
+.plan-card.active { border-color:#123a5c; background:#eff6ff; font-weight:800; }
