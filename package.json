@@ -1,1 +1,20 @@
-{"description":"خطّي — منصة خطوط النقل (ويب PWA + موبايل عبر Capacitor)","devDependencies":{"@capacitor/android":"^7.0.0","@capacitor/cli":"^7.0.0","@capacitor/core":"^7.0.0","@capacitor/ios":"^7.0.0"},"name":"khatti","private":true,"scripts":{"mobile:sync":"npm run web:pack && npx cap sync","web:pack":"node scripts/pack-www.js"},"version":"0.1.0"}
+{
+  "description": "خطّي — منصة خطوط النقل (ويب PWA + موبايل عبر Capacitor)",
+  "devDependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@playwright/test": "^1.64.0"
+  },
+  "name": "khatti",
+  "private": true,
+  "scripts": {
+    "mobile:sync": "npm run web:pack && npx cap sync",
+    "web:pack": "node scripts/pack-www.js",
+    "test:unit": "node --test tests/*.test.js",
+    "test:browser": "playwright test",
+    "test": "npm run web:pack && npm run test:unit && npm run test:browser"
+  },
+  "version": "0.1.0"
+}
