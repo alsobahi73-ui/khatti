@@ -61,7 +61,7 @@ else if(role==="driver"){f.innerHTML=`
 <div class="row"><div class="field grow"><label>رقم اللوحة</label><input id="vplate" placeholder="مثال: ب 12345"></div>
 <div class="field grow"><label>سنة الصنع</label><input id="vyear" type="number" min="1990" max="2026" value="2020"></div></div>
 <div class="field"><label>عدد المقاعد</label><input id="vseats" type="number" min="4" max="60" value="14"></div>
-<div class="field"><label>صورة إجازة السوق</label><input id="vlic" type="file" accept="image/*"><div class="mut" id="licname" style="margin-top:4px"></div></div>
+<div class="field"><label>صورة إجازة السوق <span style="color:#c00">* إلزامي</span></label><input id="vlic" type="file" accept="image/*"><div class="mut" id="licname" style="margin-top:4px"></div></div>
 <button class="btn btn-a" id="ddone">إرسال للمراجعة البشرية 📋</button></div></div>
 <div class="danger-note">⚠️ لن تُنشر خطوطك أو إعلاناتك حتى تُراجَع بياناتك وتُقبَل — حماية للركاب.</div>`;
 $("#vlic").onchange=e=>{if(e.target.files[0])$("#licname").textContent="✓ تم اختيار: "+e.target.files[0].name+" (محاكاة رفع)"};
@@ -77,15 +77,16 @@ if(!$("#vplate").value.trim()){K.toast("أدخل رقم اللوحة");return}
 if(!(yr>=1990&&yr<=2026)){K.toast("سنة الصنع غير صحيحة");return}
 if(!(seats>=4&&seats<=60)){K.toast("عدد المقاعد بين 4 و 60");return}
 const licFile=$("#vlic").files[0];
+if(!licFile){K.toast("صورة إجازة السوق إلزامية — أرفقها لإتمام التسجيل");return}
 K.set("driver",{name:$("#dname").value.trim(),phone:$("#dphone").value.trim(),role:"driver",verified:false,
-vehicle:{type:$("#vtype").value,plate:$("#vplate").value.trim(),year:yr,seats,lic:licFile?licFile.name:null}});
+vehicle:{type:$("#vtype").value,plate:$("#vplate").value.trim(),year:yr,seats,lic:licFile.name}});
 waiting()}}}
 function waiting(){const d=K.get("driver",null);if(!d){location.href="register.html";return}
 app.innerHTML=`<div class="card" style="text-align:center;padding:30px 14px"><div style="font-size:50px">⏳</div>
 <h3>حسابك قيد المراجعة البشرية</h3>
 <p class="mut" style="line-height:1.9;margin:8px 0">أهلًا <b>${K.esc(d.name)}</b> — استلمنا بياناتك وبيانات المركبة (${K.esc(d.vehicle.type)} — لوحة ${K.esc(d.vehicle.plate)}).<br>
 لن تُنشر خطوطك أو إعلاناتك حتى تُراجَع وتُقبَل.<br>يصلك إشعار فور القبول — عادة خلال 24 ساعة.</p>
-${d.vehicle.lic?`<div class="ok-note" style="text-align:right">✓ صورة الإجازة مرفقة: ${K.esc(d.vehicle.lic)}</div>`:`<div class="note" style="text-align:right">⚠️ لم تُرفق صورة إجازة السوق (تجريبي) — ستُطلب عند التفعيل الحقيقي.</div>`}
+<div class="ok-note" style="text-align:right">✓ صورة الإجازة مرفقة: ${K.esc(d.vehicle.lic)}</div>
 <div class="ok-note" style="text-align:right">🧪 <b>وضع تجريبي:</b> زر المحاكاة أدناه يمثّل قرار المراجع البشري.</div>
 <button class="btn btn-a" id="simok">محاكاة قبول المراجعة ✓</button>
 <button class="btn btn-g" onclick="K.set('driver',null);location.href='register.html'">إلغاء التسجيل</button></div>`;
