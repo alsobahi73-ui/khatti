@@ -4,7 +4,7 @@
 <div class="field"><label>نص التنبيه أو الإشعار</label>
 <textarea id="msg" rows="4" placeholder="مثال: يرجى العلم بوجود تأخير 15 دقيقة بسبب الازدحام المروري..."></textarea>
 </div>
-<button class="btn btn-p" id="send">إرسال التنبيه الآن</button>
+<button class="btn btn-p" id="send">حفظ تنبيه تجريبي محلي</button>
 </div>
 <div class="card"><h3>📜 التنبيهات السابقة</h3><div id="history"></div></div>
 </main></div>
@@ -15,12 +15,12 @@
   K.page("إرسال تنبيه","index.html");
   $("#send").onclick=function(){
     const msg=$("#msg").value.trim();
-    if(!msg){K.toast("يرجى كتابة نص التنبيه");return;}
+    if(!msg||msg.length>2000){K.toast("يرجى كتابة نص التنبيه");return;}
     const broadcasts=K.get("broadcasts",[]);
     const now=new Date().toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'});
     broadcasts.unshift({id:"b_"+Date.now(),msg,t:msg,time:now,d:now});
     K.set("broadcasts",broadcasts);
-    K.toast("تم إرسال التنبيه بنجاح لجميع المشتركين");
+    K.toast("حُفظ التنبيه محليًا؛ لم يُرسل لأي مشترك");
     $("#msg").value="";
     render();
   };

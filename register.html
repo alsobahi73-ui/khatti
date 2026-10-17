@@ -5,18 +5,18 @@
 K.page("تسجيل حساب","index.html");
 const app=$("#app");
 const qs=new URLSearchParams(location.search);
-const role0=qs.get("role"), nextUrl=qs.get("next")||"";
+const role0=qs.get("role"), requestedNext=qs.get("next")||"", nextUrl=safeNext(requestedNext);
 const me=K.get("me",null),dv=K.get("driver",null);
-let role=role0||"",codeSent=false,codeOk=false,vcodeSent=false,vcodeOk=false;
+let role=["passenger","driver"].includes(role0)?role0:"",codeSent=false,codeOk=false,vcodeSent=false,vcodeOk=false;
 let pN=K.get("draft_pN",""),pP=K.get("draft_pP",""),dN=K.get("draft_dN",""),dP=K.get("draft_dP","");
 
-if(me){app.innerHTML=`<div class="ok-note">✓ لديك حساب راكب مسجل: <b>${K.esc(me.name)}</b></div>
+if(me&&role!=="driver"){app.innerHTML=`<div class="ok-note">✓ لديك حساب راكب مسجل: <b>${K.esc(me.name)}</b></div>
 <a class="btn btn-p" href="passenger/search.html">متابعة إلى التطبيق ←</a>
-<button class="btn btn-g" onclick="K.set('me',null);location.reload()">تسجيل خروج</button>`}
-else if(dv&&dv.verified){app.innerHTML=`<div class="ok-note">✓ لديك حساب سائق موثّق: <b>${K.esc(dv.name)}</b></div>
+<button class="btn btn-g" onclick="logoutDemo()">تسجيل خروج</button>`}
+else if(dv&&dv.verified&&role!=="passenger"){app.innerHTML=`<div class="ok-note">✓ لديك حساب سائق تجريبي غير موثّق فعليًا: <b>${K.esc(dv.name)}</b></div>
 <a class="btn btn-p" href="driver/index.html">متابعة إلى لوحة السائق ←</a>
-<button class="btn btn-g" onclick="K.set('driver',null);location.reload()">تسجيل خروج</button>`}
-else if(dv&&!dv.verified){waiting()}
+<button class="btn btn-g" onclick="logoutDemo()">تسجيل خروج</button>`}
+else if(dv&&!dv.verified&&role!=="passenger"){waiting()}
 else{app.innerHTML=`
 <div class="card"><h3>اختر نوع الحساب</h3>
 <div class="row">
@@ -27,69 +27,79 @@ if(role)renderForm()}
 function pick(r){role=r;codeSent=codeOk=vcodeSent=vcodeOk=false;history.replaceState(null,"","register.html?role="+r+(nextUrl?"&next="+encodeURIComponent(nextUrl):""));
 $$("#app .row .btn").forEach((b,i)=>{b.className="btn "+((i===0)===(r==="passenger")?"btn-p":"btn-g");b.style.marginTop="0"});renderForm()}
 function codeBox(pref){return `<div id="${pref}codebox" style="display:${codeSent||vcodeSent?"block":"none"}">
-<div class="ok-note">📱 تم إرسال رمز التحقق (تجريبي: <b>أي رمز من 4 أرقام</b> يُقبل).</div>
-<div class="field"><label>رمز التحقق</label><input id="${pref}code" inputmode="numeric" maxlength="4" placeholder="••••" dir="ltr" style="text-align:center;letter-spacing:6px;font-size:20px"></div>
+<div class="ok-note">📱 لم تُرسل رسالة؛ محاكاة محلية (تجريبي: <b>أي رمز من 4 أرقام</b> يُقبل).</div>
+<div class="field"><label for="${pref}code">رمز المحاكاة</label><input id="${pref}code" inputmode="numeric" maxlength="4" placeholder="••••" dir="ltr" style="text-align:center;letter-spacing:6px;font-size:20px"></div>
 <button class="btn btn-p" id="${pref}verify">تحقق ✓</button></div>`}
 function renderForm(){const f=$("#form");if(!f)return;
 if(role==="passenger"){f.innerHTML=`
 <div class="card"><h3>🧑‍🎓 تسجيل راكب</h3>
-<div class="field"><label>الاسم الكامل</label><input id="pname" placeholder="مثال: زهراء محمد" value="${K.esc(pN)}"></div>
-<div class="field"><label>رقم الهاتف العراقي</label><input id="pphone" inputmode="numeric" placeholder="07xxxxxxxxx" dir="ltr" style="text-align:right" value="${K.esc(pP)}"></div>
-<button class="btn btn-g" id="psend">أرسل رمز التحقق 📲</button>${codeBox("p")}
+<div class="field"><label for="pname">الاسم الكامل</label><input id="pname" maxlength="100" autocomplete="name" placeholder="مثال: زهراء محمد" value="${K.esc(pN)}"></div>
+<div class="field"><label for="pphone">رقم الهاتف العراقي</label><input id="pphone" type="tel" autocomplete="tel" maxlength="16" inputmode="numeric" placeholder="07xxxxxxxxx" dir="ltr" style="text-align:right" value="${K.esc(pP)}"></div>
+<button class="btn btn-g" id="psend">محاكاة رمز الهاتف 📲</button>${codeBox("p")}
 <div id="pfinal" style="display:${codeOk?"block":"none"}">
-<div class="field" style="margin-top:10px"><label>ربط ابن (اختياري) — اسم الابن</label><input id="cname" placeholder="مثال: علي"></div>
-<div class="field"><label>رمز الدعوة (اختياري)</label><input id="ccode" placeholder="يرسله الابن من حسابه" dir="ltr" style="text-align:right"></div>
+<div class="field" style="margin-top:10px"><label for="cname">ربط ابن (اختياري) — اسم الابن</label><input id="cname" placeholder="مثال: علي"></div>
+<div class="field"><label for="ccode">رمز الدعوة (اختياري)</label><input id="ccode" placeholder="يرسله الابن من حسابه" dir="ltr" style="text-align:right"></div>
 <button class="btn btn-a" id="pdone">إتمام التسجيل ✓</button></div></div>`;
 $("#psend").onclick=()=>{pN=$("#pname").value;pP=$("#pphone").value;
 if(!KhattiCore.name(pN)){K.toast("أدخل الاسم");return}
 if(!KhattiCore.phone(pP)){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return}
 K.set("draft_pN",pN);K.set("draft_pP",pP);
-codeSent=true;renderForm();K.toast("تم إرسال الرمز 📲")};
+codeSent=true;renderForm();K.toast("محاكاة فقط؛ لم يُرسل رمز للهاتف")};
 const pv=$("#pverify");if(pv)pv.onclick=()=>{if(!/^\d{4}$/.test($("#pcode").value.trim())){K.toast("الرمز 4 أرقام (تجريبي: أي 4 أرقام)");return}
-codeOk=true;renderForm();K.toast("تم التحقق ✓")};
+codeOk=true;renderForm();K.toast("اكتملت المحاكاة؛ لا تحقق أمني حقيقي")};
 const pd=$("#pdone");if(pd)pd.onclick=()=>{const kids=[];
+if(!codeOk||!KhattiCore.name($("#pname").value)||!KhattiCore.phone($("#pphone").value)||$("#pname").value!==pN||$("#pphone").value!==pP){K.toast("أعد محاكاة الرمز بعد تعديل الاسم أو الهاتف");return}
 if($("#cname").value.trim())kids.push({name:$("#cname").value.trim(),code:$("#ccode").value.trim()});
-K.set("me",{name:$("#pname").value.trim(),phone:$("#pphone").value.trim(),role:"passenger",children:kids});
+if(!saveLocal("me",{name:$("#pname").value.trim(),phone:$("#pphone").value.trim(),role:"passenger",children:kids}))return;
 K.toast("أهلًا "+$("#pname").value.trim()+" 🎉");setTimeout(()=>location.href=nextUrl||"passenger/search.html",900)}}
 else if(role==="driver"){f.innerHTML=`
-<div class="card"><h3>🚌 تسجيل سائق — توثيق مشدد</h3>
-<div class="field"><label>الاسم الكامل</label><input id="dname" placeholder="مثال: ستار جبار" value="${K.esc(dN)}"></div>
-<div class="field"><label>رقم الهاتف العراقي</label><input id="dphone" inputmode="numeric" placeholder="07xxxxxxxxx" dir="ltr" style="text-align:right" value="${K.esc(dP)}"></div>
-<button class="btn btn-g" id="dsend">أرسل رمز التحقق 📲</button>${codeBox("v")}
+<div class="card"><h3>🚌 تسجيل سائق — محاكاة التوثيق</h3>
+<div class="field"><label for="dname">الاسم الكامل</label><input id="dname" maxlength="100" autocomplete="name" placeholder="مثال: ستار جبار" value="${K.esc(dN)}"></div>
+<div class="field"><label for="dphone">رقم الهاتف العراقي</label><input id="dphone" type="tel" autocomplete="tel" maxlength="16" inputmode="numeric" placeholder="07xxxxxxxxx" dir="ltr" style="text-align:right" value="${K.esc(dP)}"></div>
+<button class="btn btn-g" id="dsend">محاكاة رمز الهاتف 📲</button>${codeBox("v")}
 <div id="vfinal" style="display:${vcodeOk?"block":"none"}">
 <h3 style="margin:12px 0 8px">🚐 بيانات المركبة</h3>
-<div class="field"><label>نوع المركبة</label><select id="vtype"><option>كوستر</option><option>هايس</option><option>باص صغير</option><option>سيدان</option></select></div>
-<div class="row"><div class="field grow"><label>رقم اللوحة</label><input id="vplate" placeholder="مثال: ب 12345"></div>
-<div class="field grow"><label>سنة الصنع</label><input id="vyear" type="number" min="1990" max="2026" value="2020"></div></div>
-<div class="field"><label>عدد المقاعد</label><input id="vseats" type="number" min="4" max="60" value="14"></div>
-<div class="field"><label>صورة إجازة السوق <span style="color:#c00">* إلزامي</span></label><input id="vlic" type="file" accept="image/*"><div class="mut" id="licname" style="margin-top:4px"></div></div>
-<button class="btn btn-a" id="ddone">إرسال للمراجعة البشرية 📋</button></div></div>
-<div class="danger-note">⚠️ لن تُنشر خطوطك أو إعلاناتك حتى تُراجَع بياناتك وتُقبَل — حماية للركاب.</div>`;
+<div class="field"><label for="vtype">نوع المركبة</label><select id="vtype"><option>كوستر</option><option>هايس</option><option>باص صغير</option><option>سيدان</option></select></div>
+<div class="row"><div class="field grow"><label for="vplate">رقم اللوحة</label><input id="vplate" placeholder="مثال: ب 12345"></div>
+<div class="field grow"><label for="vyear">سنة الصنع</label><input id="vyear" type="number" step="1" min="1990" max="${new Date().getFullYear()}" value="2020"></div></div>
+<div class="field"><label for="vseats">عدد المقاعد</label><input id="vseats" type="number" step="1" min="4" max="60" value="14"></div>
+<div class="field"><label for="vlic">صورة إجازة السوق <span style="color:#c00">* إلزامي</span></label><input id="vlic" type="file" accept="image/*"><div class="mut" id="licname" style="margin-top:4px"></div></div>
+<button class="btn btn-a" id="ddone">حفظ بيانات العرض محليًا 📋</button></div></div>
+<div class="danger-note">🧪 لا يوجد توثيق أو رفع مستندات أو مراجعة بشرية حقيقية. استخدم صورة تجريبية ولا ترفق مستندًا شخصيًا.</div>`;
 $("#vlic").onchange=e=>{if(e.target.files[0])$("#licname").textContent="✓ تم اختيار: "+e.target.files[0].name+" (محاكاة رفع)"};
 $("#dsend").onclick=()=>{dN=$("#dname").value;dP=$("#dphone").value;
 if(!KhattiCore.name(dN)){K.toast("أدخل الاسم");return}
 if(!KhattiCore.phone(dP)){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return}
 K.set("draft_dN",dN);K.set("draft_dP",dP);
-vcodeSent=true;renderForm();K.toast("تم إرسال الرمز 📲")};
+vcodeSent=true;renderForm();K.toast("محاكاة فقط؛ لم يُرسل رمز للهاتف")};
 const vv=$("#vverify");if(vv)vv.onclick=()=>{if(!/^\d{4}$/.test($("#vcode").value.trim())){K.toast("الرمز 4 أرقام (تجريبي: أي 4 أرقام)");return}
-vcodeOk=true;renderForm();K.toast("تم التحقق ✓")};
+vcodeOk=true;renderForm();K.toast("اكتملت المحاكاة؛ لا تحقق أمني حقيقي")};
 const dd=$("#ddone");if(dd)dd.onclick=()=>{const yr=+$("#vyear").value,seats=+$("#vseats").value;
+if(!vcodeOk||!KhattiCore.name($("#dname").value)||!KhattiCore.phone($("#dphone").value)||$("#dname").value!==dN||$("#dphone").value!==dP){K.toast("أعد محاكاة الرمز بعد تعديل الاسم أو الهاتف");return}
 if(!$("#vplate").value.trim()){K.toast("أدخل رقم اللوحة");return}
-if(!(yr>=1990&&yr<=2026)){K.toast("سنة الصنع غير صحيحة");return}
-if(!(seats>=4&&seats<=60)){K.toast("عدد المقاعد بين 4 و 60");return}
+if(!Number.isInteger(yr)||yr<1990||yr>new Date().getFullYear()){K.toast("سنة الصنع غير صحيحة");return}
+if(!Number.isInteger(seats)||seats<4||seats>60){K.toast("عدد المقاعد بين 4 و 60");return}
 const licFile=$("#vlic").files[0];
-if(!licFile){K.toast("صورة إجازة السوق إلزامية — أرفقها لإتمام التسجيل");return}
-K.set("driver",{name:$("#dname").value.trim(),phone:$("#dphone").value.trim(),role:"driver",verified:false,
-vehicle:{type:$("#vtype").value,plate:$("#vplate").value.trim(),year:yr,seats,lic:licFile.name}});
+if(!licFile||!licFile.type.startsWith("image/")||licFile.size>5*1024*1024){K.toast("أرفق صورة تجريبية لا تتجاوز 5 ميغابايت");return}
+if(!saveLocal("driver",{name:$("#dname").value.trim(),phone:$("#dphone").value.trim(),role:"driver",verified:false,
+vehicle:{type:$("#vtype").value,plate:$("#vplate").value.trim(),year:yr,seats,lic:licFile.name}}))return;
 waiting()}}}
 function waiting(){const d=K.get("driver",null);if(!d){location.href="register.html";return}
 app.innerHTML=`<div class="card" style="text-align:center;padding:30px 14px"><div style="font-size:50px">⏳</div>
-<h3>حسابك قيد المراجعة البشرية</h3>
-<p class="mut" style="line-height:1.9;margin:8px 0">أهلًا <b>${K.esc(d.name)}</b> — استلمنا بياناتك وبيانات المركبة (${K.esc(d.vehicle.type)} — لوحة ${K.esc(d.vehicle.plate)}).<br>
-لن تُنشر خطوطك أو إعلاناتك حتى تُراجَع وتُقبَل.<br>يصلك إشعار فور القبول — عادة خلال 24 ساعة.</p>
-<div class="ok-note" style="text-align:right">✓ صورة الإجازة مرفقة: ${K.esc(d.vehicle.lic)}</div>
+<h3>محاكاة حساب قيد المراجعة</h3>
+<p class="mut" style="line-height:1.9;margin:8px 0">أهلًا <b>${K.esc(d.name)}</b> — حُفظت محليًا بيانات العرض والمركبة (${K.esc(d.vehicle.type)} — لوحة ${K.esc(d.vehicle.plate)}).<br>
+لا تُرسل البيانات لمراجع بشري ولا تصلك إشعارات قبول حقيقية.</p>
+<div class="ok-note" style="text-align:right">اسم ملف الصورة التجريبية فقط (لم تُرفع): ${K.esc(d.vehicle.lic)}</div>
 <div class="ok-note" style="text-align:right">🧪 <b>وضع تجريبي:</b> زر المحاكاة أدناه يمثّل قرار المراجع البشري.</div>
 <button class="btn btn-a" id="simok">محاكاة قبول المراجعة ✓</button>
-<button class="btn btn-g" onclick="K.set('driver',null);location.href='register.html'">إلغاء التسجيل</button></div>`;
-$("#simok").onclick=()=>{d.verified=true;K.set("driver",d);K.toast("تم قبولك — أهلًا بك كسائق موثّق 🎉");setTimeout(()=>location.href="driver/index.html",900)}}
+<button class="btn btn-g" onclick="logoutDemo()">إلغاء التسجيل</button></div>`;
+$("#simok").onclick=()=>{d.verified=true;if(!saveLocal("driver",d)){d.verified=false;return}K.toast("محاكاة قبول فقط؛ لم يُوثّق الحساب فعليًا");setTimeout(()=>location.href="driver/index.html",900)}}
+function saveLocal(key,value){
+try{K.set(key,value);if(JSON.stringify(K.get(key,null))!==JSON.stringify(value))throw new Error("save failed");return true}
+catch(e){K.toast("تعذّر حفظ البيانات المحلية؛ تحقق من المساحة وإعدادات المتصفح");return false}
+}
+function safeNext(value){
+try{const u=new URL(value,location.href);if(u.origin!==location.origin||!u.pathname.startsWith(new URL("passenger/",location.href).pathname)||!u.pathname.endsWith(".html"))return "";return u.pathname+u.search+u.hash}catch(e){return ""}
+}
+function logoutDemo(){try{const keys=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith("khatti_"))keys.push(key)}keys.forEach(key=>localStorage.removeItem(key));location.href="register.html"}catch(e){K.toast("تعذّر مسح الجلسة المحلية؛ تحقق من إعدادات المتصفح")}}
 </script></body></html>

@@ -5,17 +5,23 @@
 (function(){
   if(!K.access())return;
   K.page("تقييم الرحلة","trips.html");
+  const id=new URLSearchParams(location.search).get("id");
+  const trip=K.get("trips",[]).find(t=>t.id===id);
+  if(!trip||!K.tripLine(trip)){K.missing();return}
   $("#app").innerHTML=`
     <div class="card">
       <h3>⭐ تقييم السائق والرحلة</h3>
-      <div class="field"><label>التقييم (1-5)</label><select id="rstar"><option value="5">5 ★</option><option value="4">4 ★</option><option value="3">3 ★</option></select></div>
-      <div class="field"><label>تعليقك</label><textarea id="rtxt" rows="3"></textarea></div>
-      <button class="btn btn-p" id="rok">إرسال التقييم ✓</button>
+      <div class="field"><label for="rstar">التقييم (1-5)</label><select id="rstar"><option value="5">5 ★</option><option value="4">4 ★</option><option value="3">3 ★</option><option value="2">2 ★</option><option value="1">1 ★</option></select></div>
+      <div class="field"><label for="rtxt">تعليقك</label><textarea id="rtxt" rows="3" maxlength="2000"></textarea></div>
+      <button class="btn btn-p" id="rok">حفظ تقييم تجريبي</button>
     </div>
   `;
   $("#rok").onclick=function(){
-    K.toast("تم إرسال تقييمك بنجاح");
-    setTimeout(()=>location.href="trips.html",800);
+    const trips=K.get("trips",[]),current=trips.find(t=>t.id===id);
+    if(!KhattiCore.canRate(current)){K.toast("التقييم متاح مرة واحدة بعد اكتمال الرحلة التجريبية");return}
+    const ratings=K.get("ratings",[]);ratings.push({tripId:id,stars:Number($("#rstar").value),comment:$("#rtxt").value.trim(),demo:true});
+    try{K.commit({ratings,trips:trips.map(t=>t.id===id?{...t,rated:true}:t)})}catch(e){K.toast("لم تكتمل العملية؛ تعذّر حفظ التقييم");return}
+    $("#rok").disabled=true;K.toast("حُفظ التقييم محليًا للتجربة؛ لم يُرسل");
   };
 })();
 </script></body></html>

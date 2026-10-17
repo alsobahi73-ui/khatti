@@ -25,7 +25,9 @@
         if(!from||!to)continue;
         const key=from+"__"+to;
         if(!map[key])map[key]={from,to,totalSeats:0,requests:0,notes:[]};
-        map[key].totalSeats+=Number(r.seats||r.count||1);
+        const seats=r.seats??r.count??1;
+        if(!this.integer(seats,1,60))continue;
+        map[key].totalSeats+=Number(seats);
         map[key].requests+=1;
         if(r.note)map[key].notes.push(r.note);
       }

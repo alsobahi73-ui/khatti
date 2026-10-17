@@ -4,19 +4,25 @@
 <script>
 (function(){
   if(!K.access())return;
-  const id=new URLSearchParams(location.search).get("id")||"l1";
+  const id=new URLSearchParams(location.search).get("id");
   const l=K.line(id);
   K.page("حجز مقعد واشتراك","search.html");
   if(!l){K.missing();return;}
 
   let selectedPlan={id:"full",label:"شهري كامل (5 أيام)",mult:1};
-  let selectedSeats=["مقعد 3"];
+  let selectedSeats=[],saved=false;
+  const serviceDate=KhattiCore.today();
+  const existing=K.get("bookings",[]).filter(x=>x.lineId===id&&x.status==="upcoming");
+  const reserved=existing.flatMap(x=>Array.isArray(x.seats)?x.seats:[]);
 
-  const totalSeats=Math.min(14,Math.max(4,Number(l.seats)||14));
-  const takenCount=Math.max(0,totalSeats-Number(l.free));
+  const totalSeats=Number(l.seats)||14;
+  const takenCount=Math.max(0,totalSeats-Number(l.free)-reserved.length);
+  const unavailable=name=>Number(name.replace("مقعد ",""))<=takenCount||reserved.includes(name);
+  for(let i=1;i<=totalSeats;i++){if(!unavailable("مقعد "+i)){selectedSeats=["مقعد "+i];break}}
   const dayPrice=l.day||Math.round(l.price/26);
 
   $("#app").innerHTML=`
+    <div class="note">محاكاة محلية فقط؛ لا يُرسل الحجز إلى سائق ولا يتم دفع أو تحقق أمني فعلي.</div>
     <div class="card">
       <div class="route" style="font-size:17px;font-weight:800;">${K.esc(l.from)} ← ${K.esc(l.to)}</div>
       <div class="mut">السائق: ${K.esc(l.driver||l.driverName||"")} • السعر الأساسي: ${K.fmt(l.price)}/شهر</div>
@@ -38,15 +44,15 @@
       </div>
 
       <div class="row" style="gap:8px;">
-        <div class="field grow"><label>نقطة الصعود</label><select id="pickup">${(Array.isArray(l.pickups)&&l.pickups.length?l.pickups:[l.from,"الساحة العامة"]).map(p=>`<option>${K.esc(p)}</option>`).join("")}</select></div>
-        <div class="field grow"><label>شفت العودة المفضل</label><select id="return-shift"><option value="14:30">الوجبة الأولى (02:30 م)</option><option value="16:00">الوجبة الثانية (04:00 م)</option></select></div>
+        <div class="field grow"><label for="pickup">نقطة الصعود</label><select id="pickup">${(Array.isArray(l.pickups)&&l.pickups.length?l.pickups:[l.from,"الساحة العامة"]).map(p=>`<option>${K.esc(p)}</option>`).join("")}</select></div>
+        <div class="field grow"><label for="return-shift">شفت العودة المفضل</label><select id="return-shift"><option value="14:30">الوجبة الأولى (02:30 م)</option><option value="16:00">الوجبة الثانية (04:00 م)</option></select></div>
       </div>
 
-      <div class="field"><label>رقم الهاتف للتأكيد</label><input id="ph" type="tel" value="${K.esc((K.get('me',{})||{}).phone||'07700000000')}"></div>
-      <div class="field"><label>عدد المقاعد</label><select id="unit_count"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+      <div class="field"><label for="ph">رقم الهاتف للتأكيد</label><input id="ph" type="tel" value="${K.esc((K.get('me',{})||{}).phone||'')}"></div>
+      <div class="field"><label for="unit_count">عدد المقاعد</label><select id="unit_count"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
 
       <div class="note" id="price-summary" style="margin:10px 0;font-weight:700;"></div>
-      <button class="btn btn-p" id="ok" style="width:100%;">تأكيد الحجز وإصدار بطاقة الصعود ✓</button>
+      <button class="btn btn-p" id="ok" style="width:100%;">حفظ حجز وبطاقة صعود تجريبيين</button>
     </div>
   `;
 
@@ -55,7 +61,7 @@
     let html=`<div class="seat-btn driver-seat">🚘 السائق</div><div></div>`;
     for(let i=1;i<=totalSeats;i++){
       const name="مقعد "+i;
-      const isTaken=i<=takenCount;
+      const isTaken=unavailable(name);
       const isSel=selectedSeats.includes(name);
       html+=`<button type="button" class="seat-btn ${isTaken?'taken':(isSel?'selected':'')}" data-seat="${name}" ${isTaken?'disabled':''}>💺 ${name}</button>`;
     }
@@ -64,7 +70,7 @@
   }
 
   function updateSummary(){
-    const count=Math.max(1,selectedSeats.length||Number($("#unit_count").value)||1);
+    const count=selectedSeats.length;
     const total=Math.round(l.price*selectedPlan.mult*count);
     $("#price-summary").textContent=`الباقة: ${selectedPlan.label} | المقاعد: ${selectedSeats.join("، ")||count} | الإجمالي: ${K.fmt(total)}`;
   }
@@ -74,9 +80,9 @@
     if(!btn||btn.classList.contains("taken")||btn.classList.contains("driver-seat"))return;
     const s=btn.dataset.seat;
     if(selectedSeats.includes(s)){
-      if(selectedSeats.length>1)selectedSeats=selectedSeats.filter(x=>x!==s);
+      if(selectedSeats.length>0)selectedSeats=selectedSeats.filter(x=>x!==s);
     }else{
-      selectedSeats.push(s);
+      if(selectedSeats.length<3)selectedSeats.push(s);
     }
     $("#unit_count").value=String(Math.min(3,selectedSeats.length));
     renderSeats();
@@ -85,7 +91,7 @@
   $("#unit_count").onchange=function(){
     const c=Number(this.value)||1;
     selectedSeats=[];
-    for(let i=takenCount+1;i<=totalSeats&&selectedSeats.length<c;i++)selectedSeats.push("مقعد "+i);
+    for(let i=1;i<=totalSeats&&selectedSeats.length<c;i++)if(!unavailable("مقعد "+i))selectedSeats.push("مقعد "+i);
     renderSeats();
   };
 
@@ -99,9 +105,14 @@
   });
 
   $("#ok").onclick=function(){
+    if(saved)return;
     const ph=$("#ph").value.trim();
     if(!KhattiCore.phone(ph)){K.toast("يرجى إدخال رقم هاتف عراقي صحيح");return;}
     const bookings=K.get("bookings",[]);
+    if(bookings.some(x=>x.lineId===id&&x.status==="upcoming")){K.toast("لديك حجز تجريبي قائم لهذا الخط");return}
+    const current=K.line(id);
+    const latestReserved=bookings.filter(x=>x.lineId===id&&x.status==="upcoming").flatMap(x=>Array.isArray(x.seats)?x.seats:[]);
+    if(!current||!KhattiCore.integer(selectedSeats.length,1,Math.min(3,current.free))||selectedSeats.some(s=>unavailable(s)||latestReserved.includes(s))){K.toast("اختر مقاعد متاحة؛ العدد لا يتجاوز المقاعد المتبقية");return}
     const trips=K.get("trips",[]);
     const newId="bk_"+Date.now();
     const pin=String(Math.floor(1000+Math.random()*9000)); /* §3.14.1 — رمز صعود */
@@ -109,6 +120,7 @@
     const entry={
       id:newId,
       lineId:l.id,
+      serviceDate,
       when,
       status:"upcoming",
       pin:pin,
@@ -118,8 +130,9 @@
       returnShift:$("#return-shift").value,
       phone:ph
     };
-    K.commit({bookings:[entry,...bookings],trips:[entry,...trips]});
-    K.toast("تم الحجز بنجاح ✓ — رمز صعودك: "+pin.split("").join(" "));
+    try{K.commit({bookings:[entry,...bookings],trips:[entry,...trips]})}catch(e){K.toast("تعذّر حفظ الحجز؛ لم يتم تأكيده. تحقق من التخزين.");return}
+    saved=true;$("#ok").disabled=true;
+    K.toast("حُفظ حجز محلي تجريبي؛ لا حجز فعلي. رمز تجريبي: "+pin.split("").join(" "));
     setTimeout(()=>location.href="trips.html",1600);
   };
 

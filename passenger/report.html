@@ -8,16 +8,20 @@
   const l=K.line(id);
   K.page("تقديم بلاغ","search.html");
   if(!l){K.missing();return;}
+  const matching=KhattiCore.reportTrips(K.get("trips",[]),id,null);
   $("#app").innerHTML=`
     <div class="card">
-      <h3>⚠️ إبلاغ عن مشكلة في ${K.esc(l.from)} ← ${K.esc(l.to)}</h3>
-      <div class="field"><label>السبب</label><select id="rsn">${REASONS.map(r=>`<option>${K.esc(r)}</option>`).join("")}</select></div>
-      <button class="btn btn-p" id="rep-ok">إرسال البلاغ</button>
-    </div>
-  `;
-  $("#rep-ok").onclick=function(){
-    K.toast("تم تسجيل البلاغ بنجاح");
-    setTimeout(()=>location.href="trips.html",800);
+      <h3>⚠️ بلاغ تجريبي عن ${K.esc(l.from)} ← ${K.esc(l.to)}</h3>
+      <p class="mut">يحفظ محليًا فقط، ولا يُرسل إلى مراجعين أو جهة طوارئ.</p>
+      <div class="field"><label for="rsn">السبب</label><select id="rsn">${REASONS.map(r=>`<option>${K.esc(r)}</option>`).join("")}</select></div>
+      <div class="field"><label for="txt">وصف المشكلة</label><textarea id="txt" maxlength="2000"></textarea></div>
+      <button class="btn btn-p" id="send">حفظ بلاغ تجريبي</button>
+    </div>`;
+  $("#send").onclick=function(){
+    if(!KhattiCore.reportTrips(K.get("trips",[]),id,null).some(t=>t.id===matching[0]?.id)){K.toast("لا توجد رحلة مكتملة مطابقة لهذا البلاغ");return}
+    const description=$("#txt").value.trim();if(description.length<5){K.toast("اكتب وصفًا من 5 أحرف على الأقل");return}
+    try{K.set("reports",[...K.get("reports",[]),{id:"r_"+Date.now(),tripId:matching[0].id,lineId:id,reason:$("#rsn").value,description,createdAt:new Date().toISOString(),demo:true}])}catch(e){return}
+    $("#send").disabled=true;K.toast("حُفظ بلاغ تجريبي محليًا؛ لم يُرسل إلى أي جهة");
   };
 })();
 </script></body></html>

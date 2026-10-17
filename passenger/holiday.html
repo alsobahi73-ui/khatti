@@ -16,10 +16,19 @@
       </div>`;
     return;
   }
-  const list=HOLIDAYS.concat(K.get("holPosts",[]));
+  const list=HOLIDAYS.concat(K.get("holPosts",[])).filter(h=>KhattiCore.future(h.date,h.time));
+  let saved=false;
   window.bookHol=function(id){
-    K.toast("تم حجز مقعدك في رحلة العطلة ✓");
+    if(saved)return;
+    const h=list.find(x=>x.id===id);
+    if(!h||!KhattiCore.future(h.date,h.time)||!KhattiCore.integer(K.holFree(h),1,60)){K.toast("الرحلة غير متاحة أو اكتملت المقاعد");return}
+    const bookings=K.get("bookings",[]);
+    if(bookings.some(x=>x.holId===id&&x.status==="upcoming")){K.toast("لديك حجز تجريبي قائم لهذه الرحلة");return}
+    const entry={id:"hb_"+Date.now(),holId:id,when:h.dlabel+" — "+h.time,seats:1,status:"upcoming",rated:false,type:"رحلة عطلة تجريبية"};
+    const holSeats=K.get("holSeats",{});holSeats[id]=K.holFree(h)-1;
+    try{K.commit({holSeats,bookings:[entry,...bookings],trips:[entry,...K.get("trips",[])]})}catch(e){K.toast("تعذّر حفظ الحجز المحلي؛ لم يتم تأكيده.");return}
+    saved=true;K.toast("حُفظ مقعد تجريبي محليًا؛ لا حجز فعلي ولا دفع");setTimeout(()=>location.href="trips.html",900);
   };
-  $("#app").innerHTML=list.map(h=>K.holCard(h,"bookHol")).join("");
+  $("#app").innerHTML='<div class="note">محاكاة محلية فقط؛ لا تصل الحجوزات إلى سائق ولا يتم دفع فعلي.</div>'+(list.length?list.map(h=>K.holCard(h,"bookHol")).join(""):'<div class="card">لا توجد رحلات مستقبلية متاحة حاليًا.</div>');
 })();
 </script></body></html>

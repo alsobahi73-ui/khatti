@@ -20,7 +20,7 @@
     $("#app").innerHTML=`
       <div class="card">
         <div class="mut">أهلاً بك 👋 ${K.esc(K.dname())}</div>
-        <div class="route" style="font-size:18px;font-weight:800;margin:6px 0;">المسار: ${K.esc(l.from)} ↔ ${K.esc(l.to)}</div>
+        <div class="route" style="font-size:18px;font-weight:800;margin:6px 0;">المسار التجريبي المشترك لهذا الجهاز: ${K.esc(l.from)} ↔ ${K.esc(l.to)}</div>
         <div class="row">${K.badge(l.comp)}${K.trusted(l)}</div>
         <div class="stats">
           <div class="stat"><b>${occ}/${l.seats}</b><span>المقاعد المشغولة</span></div>
@@ -31,7 +31,7 @@
 
       <div class="card">
         <h3>📋 قائمة تحضير الركاب اليوم (${KhattiCore.today()})</h3>
-        <div class="mut" style="margin-bottom:8px;">اضغط لتأكيد صعود الطالب أو وصوله ليصل إشعار فوري لولي الأمر:</div>
+        <div class="mut" style="margin-bottom:8px;">اضغط لتأكيد صعود الطالب أو وصوله لمحاكاة إشعار محلي لولي الأمر على هذا الجهاز فقط:</div>
         ${att.map(s=>`
           <div class="card" style="margin-bottom:8px;padding:10px;background:${s.status==='absent'?'#fef2f2':'#f8fafc'};">
             <div class="row">
@@ -65,9 +65,9 @@
 
       <div class="card">
         <h3>🔄 التوثيق الدوري</h3>
-        <div class="mut" style="font-size:13px;line-height:1.9">صورة سيلفي مطلوبة <b>كل 30 يومًا</b> للتأكد أنك صاحب الحساب الموثّق — يمنع مشاركة الحسابات.</div>
+        <div class="mut" style="font-size:13px;line-height:1.9">صورة سيلفي مطلوبة <b>كل 30 يومًا</b> ضمن محاكاة الواجهة؛ لا تُرفع الصورة ولا يجري فحص هوية أو منع لمشاركة الحساب.</div>
         <div class="row" style="margin-top:8px"><span class="mut">آخر توثيق:</span><b id="selfied" style="color:#123a5c"></b></div>
-        <div class="field" style="margin-top:8px"><label>التقط صورة سيلفي جديدة</label><input type="file" id="selfie" accept="image/*"></div>
+        <div class="field" style="margin-top:8px"><label for="selfie">التقط صورة سيلفي جديدة</label><input type="file" id="selfie" accept="image/*"></div>
       </div>
 
       <div class="card">
@@ -89,7 +89,7 @@
       const d=new Date().toISOString().slice(0,10);
       K.set("selfieDate",d);
       sdEl.textContent=d;
-      K.toast("تم توثيق السيلفي ✓");
+      K.toast("حُفظ تاريخ اختيار الصورة محليًا؛ لم يُجرَ تحقق من الهوية");
     };
   }
 
