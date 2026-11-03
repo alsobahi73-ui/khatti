@@ -22,3 +22,28 @@ test('report eligibility matches completed trip and selected service',()=>{
  assert.ok(C.canRate(trips[0]));assert.ok(!C.canRate({...trips[0],rated:true}));assert.ok(!C.canRate(trips[3]));
 });
 test('HTML escaping covers quoted attributes as well as elements',()=>assert.equal(C.esc('"\'><img>&'),'&quot;&#39;&gt;&lt;img&gt;&amp;'));
+test('inTripWindow allows only [go - 60m, back + 30m] inclusive on the same day',()=>{
+ assert.equal(C.inTripWindow('07:00','14:30','05:59'),false);
+ assert.equal(C.inTripWindow('07:00','14:30','06:00'),true);
+ assert.equal(C.inTripWindow('07:00','14:30','10:15'),true);
+ assert.equal(C.inTripWindow('07:00','14:30','15:00'),true);
+ assert.equal(C.inTripWindow('07:00','14:30','15:01'),false);
+ assert.equal(C.inTripWindow('07:00','14:30',new Date('2026-10-15T05:59:00+03:00')),false);
+ assert.equal(C.inTripWindow('07:00','14:30',new Date('2026-10-15T06:00:00+03:00')),true);
+ assert.equal(C.inTripWindow('07:00','14:30',new Date('2026-10-15T11:00:00+03:00')),true);
+ assert.equal(C.inTripWindow('07:00','14:30',new Date('2026-10-15T15:00:00+03:00')),true);
+ assert.equal(C.inTripWindow('07:00','14:30',new Date('2026-10-15T15:01:00+03:00')),false);
+ assert.equal(C.inTripWindow('invalid','14:30','08:00'),false);
+});
+test('canRevealRating enforces blind 48h rule and isTrustedDriver requires verified with rating >= 4.5',()=>{
+ const now=Date.parse('2026-10-15T12:00:00+03:00');
+ assert.equal(C.canRevealRating(true,true,'2026-10-15T10:00:00+03:00',now),true);
+ assert.equal(C.canRevealRating(true,false,'2026-10-14T13:00:00+03:00',now),false);
+ assert.equal(C.canRevealRating(false,true,'2026-10-14T13:00:00+03:00',now),false);
+ assert.equal(C.canRevealRating(true,false,'2026-10-13T12:00:00+03:00',now),true);
+ assert.equal(C.canRevealRating(false,false,'2026-10-13T11:59:59+03:00',now),true);
+ assert.equal(C.isTrustedDriver({verified:true,rating:4.5}),true);
+ assert.equal(C.isTrustedDriver({verified:true,rating:4.9}),true);
+ assert.equal(C.isTrustedDriver({verified:false,trusted:true,rating:4.9}),false);
+ assert.equal(C.isTrustedDriver({verified:true,rating:4.4}),false);
+});
