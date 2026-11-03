@@ -142,13 +142,12 @@ const K={
     return `<span class="stars">${s}</span>`;
   },
   badge(c){
-    if(c==="verified")return `<span class="trusted">🧪 توثيق تجريبي</span>`;
+    if(c==="verified")return `<span class="trusted">سائق موثوق</span>`;
     const cls={girls:"b-g",boys:"b-b",mixed:"b-m"}[c]||"b-m";
     return `<span class="badge ${cls}">${this.esc(COMP[c]||c)}</span>`;
   },
   trusted(l){
-    const isTrusted=KhattiCore.record(l)?Boolean(l.trusted||l.verified):Boolean(l);
-    return isTrusted?`<span class="trusted">🧪 توثيق تجريبي</span>`:"";
+    return KhattiCore.isTrustedDriver(l)?`<span class="trusted">سائق موثوق</span>`:"";
   },
   lineCard(l){
     return `<a class="card linecard" href="line.html?id=${this.esc(l.id)}"><div class="top">${this.badge(l.comp)}${this.trusted(l)}</div><div class="route">${this.esc(l.from)} ← ${this.esc(l.to)}</div><div class="mut">${this.esc(l.driver||l.driverName||"")} • ${this.esc(l.vehicle||l.type||"")} • 🚦 ${this.esc(l.go||"07:00")} / 🏁 ${this.esc(l.back||"14:30")}</div><div class="meta"><span>${this.stars(l.rating)} ${l.rating} (${l.rc||0})</span><span>💺 ${l.free} مقاعد شاغرة</span><span>${this.fmt(l.price)}/شهر</span></div></a>`;
@@ -274,7 +273,7 @@ Object.assign(K,{
     const free=this.holFree(h);
     const dlabel=h.dlabel||h.date||"";
     const driver=h.driver||h.driverName||"";
-    return `<div class="card"><div class="row">${this.badge(h.comp)}${h.trusted?`<span class="trusted">🧪 توثيق تجريبي</span>`:""}<span class="grow"></span><b>${this.fmt(h.price)}</b></div><div class="route" style="font-weight:800;margin:6px 0">${this.esc(h.from)} ← ${this.esc(h.to)}</div><div class="mut">📅 ${this.esc(dlabel)} — 🕒 ${this.esc(h.time)} • ${this.esc(driver)} ${h.rc?this.stars(h.rating):""}</div>${h.note?`<div class="mut" style="margin-top:4px">📝 ${this.esc(h.note)}</div>`:""}<div class="row" style="margin-top:8px"><span>💺 <b>${free}</b> مقاعد متبقية</span><span class="grow"></span>${free>0?`<button class="btn btn-a" onclick="${bookFn}('${encodeURIComponent(h.id)}')">حجز الآن ✓</button>`:`<button class="btn" disabled>مكتمل</button>`}</div></div>`;
+    return `<div class="card"><div class="row">${this.badge(h.comp)}${this.trusted(h)}<span class="grow"></span><b>${this.fmt(h.price)}</b></div><div class="route" style="font-weight:800;margin:6px 0">${this.esc(h.from)} ← ${this.esc(h.to)}</div><div class="mut">📅 ${this.esc(dlabel)} — 🕒 ${this.esc(h.time)} • ${this.esc(driver)} ${h.rc?this.stars(h.rating):""}</div>${h.note?`<div class="mut" style="margin-top:4px">📝 ${this.esc(h.note)}</div>`:""}<div class="row" style="margin-top:8px"><span>💺 <b>${free}</b> مقاعد متبقية</span><span class="grow"></span>${free>0?`<button class="btn btn-a" onclick="${bookFn}('${encodeURIComponent(h.id)}')">حجز الآن ✓</button>`:`<button class="btn" disabled>مكتمل</button>`}</div></div>`;
   },
   holMatch(an,rq){return an.from===rq.from&&an.to===rq.to&&an.date===rq.date&&an.comp===rq.comp&&KhattiCore.integer(rq.seats,1,this.holFree(an))&&KhattiCore.future(an.date,an.time)},
   tripLine(t){return t.holId?this.hol(t.holId):this.line(t.lineId)},
