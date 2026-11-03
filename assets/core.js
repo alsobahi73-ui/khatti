@@ -32,20 +32,8 @@
     },
     future(date,time="23:59",now=Date.now()){if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!this.time(time))return false;const d=new Date(date+"T"+time+":00+03:00");return Number.isFinite(+d)&&new Date(date+"T12:00:00Z").toISOString().slice(0,10)===date&&+d>now},
     canRate(t){return Boolean(t)&&t.status==="done"&&!t.rated},
-    canRevealRating(myRated,otherRated,tripDate,now=Date.now()){
-      if(Boolean(myRated)&&Boolean(otherRated))return true;
-      if(tripDate===undefined||tripDate===null||tripDate==="")return false;
-      let ts;
-      if(typeof tripDate==="number")ts=tripDate;
-      else if(tripDate instanceof Date)ts=+tripDate;
-      else if(typeof tripDate==="string"){
-        const s=tripDate.trim();
-        if(!s)return false;
-        ts=/^\d{4}-\d{2}-\d{2}$/.test(s)?Date.parse(s+"T00:00:00+03:00"):Date.parse(s);
-      }else return false;
-      const refNow=now instanceof Date?+now:Number(now);
-      if(!Number.isFinite(ts)||!Number.isFinite(refNow))return false;
-      return (refNow-ts)>=48*60*60*1000;
+    canRevealRating(myRated,otherRated){
+      return Boolean(myRated)&&Boolean(otherRated);
     },
     /* عتبة 4.5 مؤقتة لأن المرجع (PROMPT.md) اشترط تقييماً عالياً دون تحديد رقم */
     isTrustedDriver(line){
@@ -57,6 +45,52 @@
     record(v){return v!==null&&typeof v==="object"&&!Array.isArray(v)},
     safeId(v){return typeof v==="string"&&/^[A-Za-z0-9_-]{1,100}$/.test(v)},
     reportTrips(trips,id,hol){return (Array.isArray(trips)?trips:[]).filter(t=>t&&t.status==="done"&&(hol?t.holId===hol:!t.holId&&t.lineId===id))},
+    completeLineTrips(a,b,c){
+      let lineId,bookings,trips;
+      if(typeof a==="string"){lineId=a;bookings=b;trips=c;}
+      else if(Array.isArray(a)&&typeof b==="string"&&c===undefined){bookings=a;trips=[];lineId=b;}
+      else{bookings=a;trips=b;lineId=c;}
+      const targetId=String(lineId??"");
+      const completedBookings=[];
+      const nextBookings=(Array.isArray(bookings)?bookings:[]).map(item=>{
+        if(!this.record(item))return item;
+        if(item.lineId===targetId&&item.status==="upcoming"){
+          const updated={...item,status:"done"};
+          completedBookings.push(updated);
+          return updated;
+        }
+        return {...item};
+      });
+      const nextTrips=(Array.isArray(trips)?trips:[]).map(item=>{
+        if(!this.record(item))return item;
+        if(item.lineId===targetId){
+          return {...item,status:"done"};
+        }
+        return {...item};
+      });
+      return {bookings:nextBookings,trips:nextTrips,completedBookings};
+    },
+    getDeviceId(){
+      const key="khatti_demo_v1_device_id";
+      try{
+        if(typeof localStorage!=="undefined"){
+          const existing=String(localStorage.getItem(key)||"").trim().replace(/^"|"$/g,"").toLowerCase();
+          if(/^[0-9a-f]{16}$/.test(existing))return existing;
+        }
+      }catch(e){}
+      let id="";
+      if(typeof crypto!=="undefined"&&crypto&&typeof crypto.getRandomValues==="function"){
+        const bytes=new Uint8Array(8);
+        crypto.getRandomValues(bytes);
+        id=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
+      }else{
+        id=Array.from({length:16},()=>Math.floor(Math.random()*16).toString(16)).join("");
+      }
+      try{
+        if(typeof localStorage!=="undefined")localStorage.setItem(key,id);
+      }catch(e){}
+      return id;
+    },
     parentCode(phone){const clean=String(phone??"").replace(/\D/g,"");return "KH-"+(clean.slice(-4)||"4829")},
     clusterRequests(reqs){
       const map={};
