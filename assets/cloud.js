@@ -167,6 +167,100 @@
         });
         return true;
       } catch(e){ return false; }
+    },
+
+    /* مزامنة الحجز والاشتراك سحابياً في جدول khatti_bookings */
+    async pushBooking(booking){
+      if(!this.isConfigured() || !booking || typeof booking !== "object") return false;
+      const cfg = this.getConfig();
+      const pay = booking.payment && typeof booking.payment === "object" ? booking.payment : {};
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/khatti_bookings`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: cfg.key,
+            Authorization: `Bearer ${cfg.key}`,
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            id: String(booking.id ?? ""),
+            line_id: String(booking.line_id ?? booking.lineId ?? ""),
+            passenger_name: String(booking.passenger_name ?? booking.passengerName ?? booking.name ?? ""),
+            phone: String(booking.phone ?? ""),
+            plan_label: String(booking.plan_label ?? booking.planLabel ?? booking.plan ?? ""),
+            seats: Array.isArray(booking.seats) ? booking.seats : [],
+            pickup: String(booking.pickup ?? ""),
+            return_shift: String(booking.return_shift ?? booking.returnShift ?? "14:30"),
+            status: String(booking.status ?? "upcoming"),
+            pay_method: String(pay.method ?? booking.pay_method ?? "cash"),
+            pay_status: String(pay.status ?? booking.pay_status ?? "pending"),
+            pay_ref: String(pay.ref ?? booking.pay_ref ?? "")
+          }),
+          signal: ctrl.signal
+        });
+        return res ? res.ok !== false : true;
+      } catch(e){ return false; }
+      finally { clearTimeout(timer); }
+    },
+
+    /* مزامنة تقييم الرحلة (راكب أو سائق) سحابياً في جدول khatti_ratings */
+    async pushRating(rating){
+      if(!this.isConfigured() || !rating || typeof rating !== "object") return false;
+      const tripId = String(rating.tripId ?? rating.trip_id ?? "").trim();
+      const role = String(rating.role ?? rating.rater_role ?? "").trim();
+      if(!tripId || !role) return false;
+      const cfg = this.getConfig();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/khatti_ratings`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: cfg.key,
+            Authorization: `Bearer ${cfg.key}`,
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            id: `${tripId}:${role}`,
+            trip_id: tripId,
+            line_id: String(rating.lineId ?? rating.line_id ?? ""),
+            rater_role: role,
+            stars: Number(rating.stars),
+            comment: String(rating.comment ?? "")
+          }),
+          signal: ctrl.signal
+        });
+        return res ? res.ok !== false : true;
+      } catch(e){ return false; }
+      finally { clearTimeout(timer); }
+    },
+
+    /* جلب تقييمات رحلة معينة من جدول khatti_ratings */
+    async pullRatings(tripId){
+      const cleanTripId = String(tripId ?? "").trim();
+      if(!this.isConfigured() || !cleanTripId) return [];
+      const cfg = this.getConfig();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/khatti_ratings?trip_id=eq.${encodeURIComponent(cleanTripId)}&select=*`, {
+          headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          signal: ctrl.signal
+        });
+        if(!res || !res.ok) return [];
+        const rows = await res.json();
+        if(!Array.isArray(rows)) return [];
+        return rows.filter(r => r && typeof r === "object").map(r => ({
+          role: String(r.rater_role ?? r.role ?? ""),
+          stars: Number(r.stars),
+          comment: String(r.comment ?? "")
+        }));
+      } catch(e){ return []; }
+      finally { clearTimeout(timer); }
     }
   };
 
