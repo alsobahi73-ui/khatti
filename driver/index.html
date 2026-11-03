@@ -1,12 +1,13 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>لوحة التحكم للسائق — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/auth.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
   K.page("لوحة التحكم للسائق","../index.html");
   const l=K.line(MYDRIVER.lineId);
   if(!l){K.missing();return;}
+  let reviewBannerVisible=false;
 
   function render(){
     const att=K.attendance(l.id);
@@ -18,6 +19,11 @@
     const occ=Math.max(0,l.seats-l.free);
 
     $("#app").innerHTML=`
+      ${reviewBannerVisible?`
+        <div class="note" id="driver-review-banner" role="status" style="margin-bottom:10px;border:2px solid #d97706;background:#fffbeb;color:#92400e;">
+          ⏳ حسابك قيد المراجعة؛ سيُفعَّل خطك بعد موافقة الإدارة
+        </div>
+      `:""}
       <div class="card">
         <div class="mut">أهلاً بك 👋 ${K.esc(K.dname())}</div>
         <div class="route" style="font-size:18px;font-weight:800;margin:6px 0;">المسار التجريبي المشترك لهذا الجهاز: ${K.esc(l.from)} ↔ ${K.esc(l.to)}</div>
@@ -99,6 +105,19 @@
   };
 
   render();
+
+  (async function checkCloudDriverStatus(){
+    const cloud=window.KhattiCloud;
+    const auth=window.KhattiAuth;
+    if(!cloud||typeof cloud.isConfigured!=="function"||!cloud.isConfigured())return;
+    const sess=auth&&typeof auth.readStoredSession==="function"?auth.readStoredSession():null;
+    if(!sess||!sess.user||sess.user.role!=="driver")return;
+    const profile=typeof cloud.getDriverProfile==="function"?await cloud.getDriverProfile(sess.user.id):null;
+    if(!profile||profile.status!=="approved"){
+      reviewBannerVisible=true;
+      render();
+    }
+  })();
 })();
 </script>
 </body></html>

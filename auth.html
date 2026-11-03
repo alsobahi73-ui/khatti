@@ -1,0 +1,177 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>المصادقة والدخول — خطّي</title><link rel="stylesheet" href="assets/style.css"><link rel="stylesheet" href="assets/style-v2.css"></head>
+<body><div class="wrap"><main id="app"></main></div>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/auth.js"></script><script src="assets/cloud.js"></script><script src="assets/app.js"></script>
+<script>
+(function(){
+  K.page("الدخول وإنشاء الحساب","index.html");
+  const app=$("#app");
+  const qs=new URLSearchParams(location.search);
+  let tab=qs.get("tab")==="signup"?"signup":"signin";
+  let role=qs.get("role")==="driver"?"driver":"passenger";
+  let alertMsg="",alertType="note";
+
+  function roleTarget(r){
+    return r==="driver"?"driver/index.html":"passenger/search.html";
+  }
+
+  function render(){
+    const sess=window.KhattiAuth?KhattiAuth.readStoredSession():null;
+    const validSess=sess&&window.KhattiAuth&&KhattiAuth.isSessionValid(sess)?sess:null;
+
+    app.innerHTML=`
+      ${validSess?`
+        <div class="ok-note" id="active-session-box" style="margin-bottom:12px;">
+          ✓ أنت مسجّل الدخول حاليًا: <b>${K.esc(validSess.user.email)}</b> (${validSess.user.role==="driver"?"سائق":"راكب"})
+          <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <a class="btn btn-p" href="${roleTarget(validSess.user.role)}">الانتقال إلى صفحتي ←</a>
+            ${validSess.user.role==="driver"?`<a class="btn btn-a" href="register.html?role=driver">إكمال ملف السائق</a>`:""}
+            <button type="button" class="btn btn-g" id="btn-signout">تسجيل الخروج</button>
+          </div>
+        </div>
+      `:""}
+
+      <div class="card">
+        <div class="row" style="gap:8px;margin-bottom:14px;">
+          <button type="button" class="btn ${tab==="signin"?"btn-p":"btn-g"} grow" id="tab-signin" style="margin-top:0">تسجيل الدخول</button>
+          <button type="button" class="btn ${tab==="signup"?"btn-p":"btn-g"} grow" id="tab-signup" style="margin-top:0">إنشاء حساب</button>
+        </div>
+
+        <div class="field" style="margin-bottom:12px;">
+          <label>اختر نوع الحساب (الدور)</label>
+          <div class="row" style="gap:8px;">
+            <button type="button" class="btn ${role==="passenger"?"btn-p":"btn-g"} grow" id="role-passenger" style="margin-top:0">🧑‍🎓 راكب</button>
+            <button type="button" class="btn ${role==="driver"?"btn-p":"btn-g"} grow" id="role-driver" style="margin-top:0">🚌 سائق</button>
+          </div>
+        </div>
+
+        <div id="auth-alert" role="alert" aria-live="polite" style="display:${alertMsg?"block":"none"};margin-bottom:12px;" class="${alertType==="ok"?"ok-note":"danger-note"}">${K.esc(alertMsg)}</div>
+
+        <form id="auth-form" novalidate>
+          ${tab==="signup"?`
+            <div class="field">
+              <label for="auth-name">الاسم الكامل</label>
+              <input id="auth-name" type="text" maxlength="100" autocomplete="name" placeholder="مثال: أحمد علي">
+            </div>
+            ${role==="driver"?`
+              <div class="field" id="driver-phone-field">
+                <label for="auth-phone">رقم الهاتف العراقي للسائق</label>
+                <input id="auth-phone" type="tel" maxlength="16" inputmode="numeric" dir="ltr" style="text-align:right" placeholder="07xxxxxxxxx">
+              </div>
+            `:""}
+          `:""}
+
+          <div class="field">
+            <label for="auth-email">البريد الإلكتروني</label>
+            <input id="auth-email" type="email" dir="ltr" autocomplete="email" placeholder="user@example.com">
+          </div>
+
+          <div class="field">
+            <label for="auth-password">كلمة المرور</label>
+            <input id="auth-password" type="password" dir="ltr" autocomplete="${tab==="signin"?"current-password":"new-password"}" placeholder="••••••••">
+          </div>
+
+          <button type="submit" class="btn btn-a" id="auth-submit" style="width:100%;margin-top:10px;">
+            ${tab==="signin"?"دخول ←":"إنشاء حساب جديد ✓"}
+          </button>
+        </form>
+      </div>
+    `;
+
+    $("#tab-signin").onclick=()=>{tab="signin";alertMsg="";render();};
+    $("#tab-signup").onclick=()=>{tab="signup";alertMsg="";render();};
+    $("#role-passenger").onclick=()=>{role="passenger";render();};
+    $("#role-driver").onclick=()=>{role="driver";render();};
+
+    const signoutBtn=$("#btn-signout");
+    if(signoutBtn){
+      signoutBtn.onclick=async()=>{
+        await KhattiAuth.signOut();
+        K.toast("تم تسجيل الخروج بنجاح");
+        render();
+      };
+    }
+
+    $("#auth-form").onsubmit=async e=>{
+      e.preventDefault();
+      alertMsg="";
+      const email=($("#auth-email")?.value||"").trim();
+      const password=$("#auth-password")?.value||"";
+      const submitBtn=$("#auth-submit");
+
+      if(!email||!email.includes("@")){
+        alertType="err";
+        alertMsg="يرجى إدخال بريد إلكتروني صحيح";
+        render();
+        return;
+      }
+      if(!password||password.length<6){
+        alertType="err";
+        alertMsg=KhattiAuth.translateError("weak_password");
+        render();
+        return;
+      }
+
+      if(tab==="signup"){
+        const name=($("#auth-name")?.value||"").trim();
+        const phone=($("#auth-phone")?.value||"").trim();
+        if(!KhattiCore.name(name)){
+          alertType="err";
+          alertMsg="يرجى إدخال الاسم الكامل (حرفان على الأقل)";
+          render();
+          return;
+        }
+        if(role==="driver"&&!KhattiCore.phone(phone)){
+          alertType="err";
+          alertMsg="رقم الهاتف للسائق يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا";
+          render();
+          return;
+        }
+        if(role==="driver"){
+          try{K.set("draft_dN",name);K.set("draft_dP",phone);}catch(_){}
+        }
+        if(submitBtn)submitBtn.disabled=true;
+        const res=await KhattiAuth.signUp(email,password,{name,role});
+        if(submitBtn)submitBtn.disabled=false;
+
+        if(!res.ok){
+          alertType="err";
+          alertMsg=res.error||KhattiAuth.translateError("error");
+          render();
+          return;
+        }
+
+        if(res.session){
+          if(role==="driver"&&window.KhattiCloud&&typeof KhattiCloud.saveDriverProfile==="function"){
+            try{await KhattiCloud.saveDriverProfile({user_id:res.session.user.id,name,phone,status:"pending"});}catch(_){}
+          }
+          const finalRole=res.session.user?.role||role;
+          location.href=roleTarget(finalRole);
+          return;
+        }
+
+        alertType="ok";
+        alertMsg="تفقد بريدك لتأكيد الحساب ثم سجّل دخولك";
+        render();
+        return;
+      }
+
+      if(submitBtn)submitBtn.disabled=true;
+      const res=await KhattiAuth.signIn(email,password);
+      if(submitBtn)submitBtn.disabled=false;
+
+      if(!res.ok||!res.session){
+        alertType="err";
+        alertMsg=res.error||KhattiAuth.translateError("invalid_grant");
+        render();
+        return;
+      }
+
+      const finalRole=res.session.user?.role||role;
+      location.href=roleTarget(finalRole);
+    };
+  }
+
+  render();
+})();
+</script>
+</body></html>

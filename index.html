@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>خطي — منصة الخطوط العراقية</title><link rel="stylesheet" href="assets/style.css"><link rel="stylesheet" href="assets/style-v2.css"></head>
-<body><div class="wrap"><header class="topbar"><a class="brand" href="index.html">🚌 <span id="t-brand">خطي</span></a><nav><a href="register.html?role=passenger" id="t-navpx">دخول الركاب</a><a href="register.html?role=driver" id="t-navdr">حساب السائق</a><a href="parent/index.html" id="t-navpar">ولي الأمر</a><a href="support.html" id="t-navsup">الدعم</a></nav></header>
+<body><div class="wrap"><header class="topbar"><a class="brand" href="index.html">🚌 <span id="t-brand">خطي</span></a><nav><a href="auth.html" id="t-navauth">المصادقة</a><a href="register.html?role=passenger" id="t-navpx">دخول الركاب</a><a href="register.html?role=driver" id="t-navdr">حساب السائق</a><a href="parent/index.html" id="t-navpar">ولي الأمر</a><a href="support.html" id="t-navsup">الدعم</a></nav></header>
 <main id="app">
 <div class="hero"><h1 id="t-heroh">خطي</h1><p id="t-herop">منصة الخطوط المباشرة — حافلات وسيارات خطية<br>اشتراك شهري مرن • تتبع حي للأهالي • خطوط عطل سريعة</p>
 <div class="langtoggle"><button id="lang-ar" class="on">عربي</button><button id="lang-ku">کوردی</button></div></div>
@@ -9,6 +9,7 @@
   <h3 id="t-gate">سجّل حساب راكب لرؤية الخطوط</h3>
   <p class="mut" id="t-gates">إعلانات الخطوط لا تظهر إلا للمسجلين — سجّل مجانًا خلال دقيقة.</p>
   <a class="btn btn-p" id="t-gatebtn" href="register.html?role=passenger">سجّل كراكب ←</a>
+  <a class="btn btn-g" id="t-authbtn" href="auth.html" style="margin-top:8px;">تسجيل الدخول / حساب سحابي</a>
 </div>
 
 <div class="grid3" style="margin-top:14px;">
@@ -30,7 +31,7 @@
   </div>
 </details>
 </main></div>
-<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/cloud.js"></script><script src="assets/app.js"></script>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/auth.js"></script><script src="assets/cloud.js"></script><script src="assets/app.js"></script>
 <script>
 /* §3.14.3 — مبدّل اللغة عربي/كردي (سوراني) + بوابة التسجيل (§3.12) */
 (function(){

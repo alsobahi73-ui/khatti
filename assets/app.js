@@ -63,9 +63,50 @@ const K={
     if(p.includes("/passenger/"))return "passenger";
     return "home";
   },
+  _isCloud(){
+    if(typeof KhattiCloud!=="undefined"&&KhattiCloud&&typeof KhattiCloud.isConfigured==="function")return KhattiCloud.isConfigured();
+    if(typeof KhattiAuth!=="undefined"&&KhattiAuth&&typeof KhattiAuth.isConfigured==="function")return KhattiAuth.isConfigured();
+    try{
+      const cfg=JSON.parse(localStorage.getItem("khatti_supabase_config_v1")||"{}");
+      return Boolean(cfg&&cfg.url&&String(cfg.url).startsWith("https://")&&cfg.key&&String(cfg.key).length>20);
+    }catch(e){return false;}
+  },
+  _validSession(){
+    if(typeof KhattiAuth!=="undefined"&&KhattiAuth&&typeof KhattiAuth.readStoredSession==="function"){
+      const s=KhattiAuth.readStoredSession();
+      return KhattiAuth.isSessionValid(s)?s:null;
+    }
+    try{
+      const raw=localStorage.getItem("khatti_demo_v1_auth");
+      if(!raw)return null;
+      const s=JSON.parse(raw);
+      if(!s||typeof s!=="object"||!s.access_token)return null;
+      const exp=Number(s.expires_at);
+      if(!Number.isFinite(exp)||exp<=0)return null;
+      const expSec=exp>=1e11?exp/1000:exp;
+      const nowSec=Date.now()/1000;
+      if(expSec-nowSec<60)return null;
+      return s;
+    }catch(e){return null;}
+  },
   switchRole(role){
     const inSub = location.pathname.includes("/driver/")||location.pathname.includes("/passenger/")||location.pathname.includes("/parent/");
     const prefix = inSub ? "../" : "";
+    if(this._isCloud()){
+      const sess = this._validSession();
+      if(role==="driver"){
+        if(!sess||sess.user?.role!=="driver"){location.href=prefix+"auth.html?role=driver";return;}
+        location.href=prefix+"driver/index.html";
+      }else if(role==="parent"){
+        location.href=prefix+"parent/index.html";
+      }else if(role==="passenger"){
+        if(!sess){location.href=prefix+"auth.html?role=passenger";return;}
+        location.href=prefix+"passenger/search.html";
+      }else{
+        location.href=prefix+"index.html";
+      }
+      return;
+    }
     if(role==="driver"){
       if(!this.get("driver",null)?.verified){location.href=prefix+"register.html?role=driver";return;}
       location.href=prefix+"driver/index.html";
@@ -313,6 +354,16 @@ K.access=function(){
   const p=location.pathname;
   const driver=p.includes("/driver/"),passenger=p.includes("/passenger/");
   if(!driver&&!passenger)return true;
+  const inSub=driver||passenger||p.includes("/parent/");
+  const prefix=inSub?"../":"";
+  if(this._isCloud()){
+    const sess=this._validSession();
+    if(!sess||(driver&&sess.user?.role!=="driver")){
+      location.replace(prefix+"auth.html");
+      return false;
+    }
+    return true;
+  }
   const account=this.get(driver?"driver":"me",null);
   if(!account||!KhattiCore.name(account.name)||(driver&&!account.verified)){
     location.replace("../register.html?role="+(driver?"driver":"passenger"));

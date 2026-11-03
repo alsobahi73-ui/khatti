@@ -1,8 +1,9 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تسجيل حساب — خطّي</title><link rel="stylesheet" href="assets/style.css"><link rel="stylesheet" href="assets/style-v2.css"></head>
-<body><div class="wrap"><main id="app"></main></div>
-<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
+<body><div class="wrap"><main id="app"></main><div class="note" style="margin-top:10px;text-align:center;"><a href="auth.html" id="link-to-auth">تسجيل الدخول أو إنشاء حساب سحابي ←</a></div></div>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/auth.js"></script><script src="assets/cloud.js"></script><script src="assets/app.js"></script>
 <script>
-K.page("تسجيل حساب","index.html");
+const isCloudMode=Boolean(window.KhattiCloud&&typeof window.KhattiCloud.isConfigured==="function"&&window.KhattiCloud.isConfigured());
+K.page(isCloudMode?"إكمال ملف السائق":"تسجيل حساب","index.html");
 const app=$("#app");
 const qs=new URLSearchParams(location.search);
 const role0=qs.get("role"), requestedNext=qs.get("next")||"", nextUrl=safeNext(requestedNext);
@@ -10,7 +11,9 @@ const me=K.get("me",null),dv=K.get("driver",null);
 let role=["passenger","driver"].includes(role0)?role0:"",codeSent=false,codeOk=false,vcodeSent=false,vcodeOk=false;
 let pN=K.get("draft_pN",""),pP=K.get("draft_pP",""),dN=K.get("draft_dN",""),dP=K.get("draft_dP","");
 
-if(me&&role!=="driver"){app.innerHTML=`<div class="ok-note">✓ لديك حساب راكب مسجل: <b>${K.esc(me.name)}</b></div>
+if(isCloudMode){
+  initCloudDriverProfile();
+}else if(me&&role!=="driver"){app.innerHTML=`<div class="ok-note">✓ لديك حساب راكب مسجل: <b>${K.esc(me.name)}</b></div>
 <a class="btn btn-p" href="passenger/search.html">متابعة إلى التطبيق ←</a>
 <button class="btn btn-g" onclick="logoutDemo()">تسجيل خروج</button>`}
 else if(dv&&dv.verified&&role!=="passenger"){app.innerHTML=`<div class="ok-note">✓ لديك حساب سائق تجريبي غير موثّق فعليًا: <b>${K.esc(dv.name)}</b></div>
@@ -24,6 +27,81 @@ else{app.innerHTML=`
 <button class="btn ${role==="driver"?"btn-p":"btn-g"}" style="margin-top:0" onclick="pick('driver')">🚌 سائق</button>
 </div></div><div id="form"></div>`;
 if(role)renderForm()}
+
+async function initCloudDriverProfile(){
+  const auth=window.KhattiAuth;
+  const sess=auth&&typeof auth.getSession==="function"?await auth.getSession():null;
+  if(!sess||!sess.user||sess.user.role!=="driver"){
+    app.innerHTML=`<div class="card" style="text-align:center;padding:24px 14px;">
+      <h3>إكمال ملف السائق يتطلب جلسة سائق نشطة</h3>
+      <p class="mut" style="margin:8px 0;">يرجى تسجيل الدخول بحساب سائق أولًا لإكمال ملفك الشخصي ورفع بيانات الإجازة.</p>
+      <a class="btn btn-p" href="auth.html?role=driver">الانتقال إلى تسجيل الدخول ←</a>
+    </div>`;
+    location.replace("auth.html?role=driver");
+    return;
+  }
+
+  const existing=window.KhattiCloud&&typeof KhattiCloud.getDriverProfile==="function"
+    ?await KhattiCloud.getDriverProfile(sess.user.id)
+    :null;
+
+  const initName=(existing&&existing.name)||dN||"";
+  const initPhone=(existing&&existing.phone)||dP||"";
+  const initLic=(existing&&existing.licence_file)||"";
+
+  app.innerHTML=`
+    <div class="card">
+      <h3>🚌 إكمال ملف السائق</h3>
+      <p class="mut" style="margin-bottom:10px;">أكمل بياناتك ليتم إرسال ملفك إلى الإدارة للمراجعة والتفعيل.</p>
+      ${existing?`<div class="note" style="margin-bottom:10px;">حالة الملف الحالية: <b>${K.esc(existing.status||"pending")}</b></div>`:""}
+      <div class="field"><label for="dname">الاسم الكامل</label><input id="dname" maxlength="100" autocomplete="name" placeholder="مثال: ستار جبار" value="${K.esc(initName)}"></div>
+      <div class="field"><label for="dphone">رقم الهاتف العراقي</label><input id="dphone" type="tel" autocomplete="tel" maxlength="16" inputmode="numeric" placeholder="07xxxxxxxxx" dir="ltr" style="text-align:right" value="${K.esc(initPhone)}"></div>
+      <div class="field"><label for="vlic">ملف / رقم إجازة السوق</label><input id="vlic" type="file" accept="image/*"><div class="mut" id="licname" style="margin-top:4px">${initLic?`الملف المحفوظ: ${K.esc(initLic)}`:""}</div></div>
+      <button class="btn btn-a" id="ddone">إرسال ملف السائق للمراجعة ✓</button>
+      <a class="btn btn-g" href="driver/index.html" style="margin-top:8px;">الانتقال إلى لوحة السائق ←</a>
+    </div>
+  `;
+
+  let selectedLic=initLic;
+  $("#vlic").onchange=e=>{
+    if(e.target.files&&e.target.files[0]){
+      selectedLic=e.target.files[0].name;
+      $("#licname").textContent="✓ تم اختيار: "+selectedLic;
+    }
+  };
+
+  $("#ddone").onclick=async()=>{
+    const nameVal=($("#dname")?.value||"").trim();
+    const phoneVal=($("#dphone")?.value||"").trim();
+    if(!KhattiCore.name(nameVal)){K.toast("أدخل الاسم الكامل");return;}
+    if(!KhattiCore.phone(phoneVal)){K.toast("رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقمًا");return;}
+    const btn=$("#ddone");
+    if(btn)btn.disabled=true;
+    const ok=window.KhattiCloud&&typeof KhattiCloud.saveDriverProfile==="function"
+      ?await KhattiCloud.saveDriverProfile({
+          user_id:sess.user.id,
+          name:nameVal,
+          phone:phoneVal,
+          licence_file:selectedLic||"",
+          status:"pending"
+        })
+      :false;
+    if(btn)btn.disabled=false;
+    if(!ok){
+      K.toast("تعذّر حفظ ملف السائق في السحابة؛ حاول مجددًا");
+      return;
+    }
+    app.innerHTML=`
+      <div class="card" style="text-align:center;padding:30px 14px">
+        <div style="font-size:48px">⏳</div>
+        <h3>تم إرسال ملف السائق (pending)</h3>
+        <p class="mut" style="line-height:1.9;margin:8px 0">حسابك قيد المراجعة؛ سيُفعَّل خطك بعد موافقة الإدارة.</p>
+        <a class="btn btn-p" href="driver/index.html">الانتقال إلى لوحة السائق ←</a>
+      </div>
+    `;
+  };
+}
+
 function pick(r){role=r;codeSent=codeOk=vcodeSent=vcodeOk=false;history.replaceState(null,"","register.html?role="+r+(nextUrl?"&next="+encodeURIComponent(nextUrl):""));
 $$("#app .row .btn").forEach((b,i)=>{b.className="btn "+((i===0)===(r==="passenger")?"btn-p":"btn-g");b.style.marginTop="0"});renderForm()}
 function codeBox(pref){return `<div id="${pref}codebox" style="display:${codeSent||vcodeSent?"block":"none"}">
