@@ -22,9 +22,29 @@ create table if not exists public.khatti_lines (
   rating numeric(3,2) default 5.0,
   rc integer default 1,
   trusted boolean default true,
+  verified boolean default false,
   pickups jsonb default '[]'::jsonb,
   updated_at timestamptz default now()
 );
+
+-- ترقية المشاريع القائمة: إضافة عمود التوثيق الفعلي للسائق/الخط (الافتراضي false؛ لا تظهر شارة موثوق إلا بعد التوثيق الفعلي)
+alter table public.khatti_lines add column if not exists verified boolean default false;
+
+-- دالة ذرية لحجز المقاعد سحابيًا ومنع الحجز الزائد (Overbooking Protection)
+create or replace function public.reserve_seat(p_line_id text, p_seats int)
+returns boolean
+language plpgsql
+as $$
+begin
+  if p_seats is null or p_seats <= 0 then
+    return false;
+  end if;
+  update public.khatti_lines
+  set free = free - p_seats
+  where id = p_line_id and free >= p_seats;
+  return found;
+end;
+$$;
 
 -- 2. جدول التتبع اللحظي المباشر لحركة ومكان السائق والراكب (Live GPS Locations)
 create table if not exists public.khatti_live_locations (
@@ -40,15 +60,21 @@ create table if not exists public.khatti_live_locations (
 
 -- 3. جدول الحضور والغياب اليومي للطلاب (Daily Student Attendance)
 create table if not exists public.khatti_attendance (
-  student_id text primary key,
+  student_id text not null,
   line_id text not null,
   student_name text not null,
   stop_name text not null,
   parent_code text not null,
   status text not null default 'waiting' check (status in ('waiting', 'boarded', 'arrived', 'absent')),
   trip_date text not null,
-  updated_at timestamptz default now()
+  updated_at timestamptz default now(),
+  primary key (student_id, trip_date, line_id)
 );
+
+-- ترقية المشاريع القائمة: تحويل المفتاح الأساسي لجدول الحضور إلى مفتاح مركّب (student_id, trip_date, line_id)
+-- ملاحظة: الصفوف القائمة تبقى صالحة لأن student_id كان فريداً ومقترناً بـ trip_date وline_id غير فارغين.
+alter table public.khatti_attendance drop constraint if exists khatti_attendance_pkey;
+alter table public.khatti_attendance add primary key (student_id, trip_date, line_id);
 
 -- 4. جدول الحجوزات والاشتراكات (Bookings)
 create table if not exists public.khatti_bookings (
@@ -87,10 +113,20 @@ create table if not exists public.khatti_ratings (
   trip_id text not null,
   line_id text default '',
   rater_role text not null check (rater_role in ('passenger', 'driver')),
-  stars integer not null,
+  stars integer not null check (stars between 1 and 5),
   comment text default '',
   created_at timestamptz default now()
 );
+
+-- ترقية المشاريع القائمة: إضافة قيد نطاق نجوم التقييم (1..5) بشكل آمن قابل لإعادة التشغيل
+do $$
+begin
+  alter table public.khatti_ratings
+    add constraint khatti_ratings_stars_check check (stars between 1 and 5);
+exception
+  when duplicate_object then null;
+end;
+$$;
 
 -- تفعيل صلاحيات القراءة والكتابة للنسخة الأولية (Row Level Security)
 alter table public.khatti_lines enable row level security;
