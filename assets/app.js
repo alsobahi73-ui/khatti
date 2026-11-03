@@ -324,8 +324,9 @@ const baseLine=K.line.bind(K);
 K.line=function(id){
   const l=baseLine(id);
   if(!l)return null;
-  const used=this.get("bookings",[]).filter(b=>b.lineId===id&&b.status==="upcoming").reduce((sum,b)=>sum+(Array.isArray(b.seats)?b.seats.length:1),0);
   const baseFree=KhattiCore.integer(l.free,0,l.seats)?l.free:l.seats;
+  if(l._cloud)return {...l,free:Math.max(0,baseFree)};
+  const used=this.get("bookings",[]).filter(b=>b.lineId===id&&b.status==="upcoming").reduce((sum,b)=>sum+(Array.isArray(b.seats)?b.seats.length:1),0);
   return {...l,free:Math.max(0,baseFree-used)};
 };
 K.missing=function(){

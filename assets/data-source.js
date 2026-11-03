@@ -7,10 +7,12 @@
       try {
         const remote = await cloud.fetchLines();
         if(Array.isArray(remote) && remote.length > 0){
-          if(typeof LINES !== "undefined" && Array.isArray(LINES)){
-            LINES.splice(0, LINES.length, ...remote);
+          const tagged = remote.map(item => (item && typeof item === "object" ? { ...item, _cloud: true } : item));
+          const targetLines = (typeof LINES !== "undefined" && Array.isArray(LINES)) ? LINES : (Array.isArray(root.LINES) ? root.LINES : null);
+          if(targetLines){
+            targetLines.splice(0, targetLines.length, ...tagged);
           }
-          return remote;
+          return tagged;
         }
       } catch(e){}
     }

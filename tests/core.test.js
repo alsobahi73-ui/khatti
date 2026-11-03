@@ -35,15 +35,43 @@ test('inTripWindow allows only [go - 60m, back + 30m] inclusive on the same day'
  assert.equal(C.inTripWindow('07:00','14:30',new Date('2026-10-15T15:01:00+03:00')),false);
  assert.equal(C.inTripWindow('invalid','14:30','08:00'),false);
 });
-test('canRevealRating enforces blind 48h rule and isTrustedDriver requires verified with rating >= 4.5',()=>{
+test('canRevealRating enforces strict mutual-rating blind rule and isTrustedDriver requires verified with rating >= 4.5',()=>{
  const now=Date.parse('2026-10-15T12:00:00+03:00');
  assert.equal(C.canRevealRating(true,true,'2026-10-15T10:00:00+03:00',now),true);
+ assert.equal(C.canRevealRating(true,true),true);
  assert.equal(C.canRevealRating(true,false,'2026-10-14T13:00:00+03:00',now),false);
  assert.equal(C.canRevealRating(false,true,'2026-10-14T13:00:00+03:00',now),false);
- assert.equal(C.canRevealRating(true,false,'2026-10-13T12:00:00+03:00',now),true);
- assert.equal(C.canRevealRating(false,false,'2026-10-13T11:59:59+03:00',now),true);
+ assert.equal(C.canRevealRating(true,false,'2026-10-13T12:00:00+03:00',now),false);
+ assert.equal(C.canRevealRating(false,false,'2026-10-13T11:59:59+03:00',now),false);
+ assert.equal(C.canRevealRating(true,false,'',now),false);
+ assert.equal(C.canRevealRating(false,true,'invalid',now),false);
  assert.equal(C.isTrustedDriver({verified:true,rating:4.5}),true);
  assert.equal(C.isTrustedDriver({verified:true,rating:4.9}),true);
  assert.equal(C.isTrustedDriver({verified:false,trusted:true,rating:4.9}),false);
  assert.equal(C.isTrustedDriver({verified:true,rating:4.4}),false);
+});
+test('completeLineTrips marks matching line upcoming bookings and trips as done without mutating inputs',()=>{
+ const bookings=[
+  {id:'b1',lineId:'l1',status:'upcoming',seats:['مقعد 1']},
+  {id:'b2',lineId:'l2',status:'upcoming',seats:['مقعد 2']},
+  {id:'b3',lineId:'l1',status:'done',seats:['مقعد 3']}
+ ];
+ const trips=[
+  {id:'b1',lineId:'l1',status:'upcoming',rated:false},
+  {id:'b2',lineId:'l2',status:'upcoming',rated:false},
+  {id:'t_hol',holId:'h1',status:'upcoming',rated:false}
+ ];
+ const res=C.completeLineTrips('l1',bookings,trips);
+ assert.equal(bookings[0].status,'upcoming');
+ assert.equal(trips[0].status,'upcoming');
+ assert.equal(res.bookings[0].status,'done');
+ assert.equal(res.bookings[1].status,'upcoming');
+ assert.equal(res.bookings[2].status,'done');
+ assert.equal(res.completedBookings.length,1);
+ assert.equal(res.completedBookings[0].id,'b1');
+ assert.equal(res.trips[0].status,'done');
+ assert.equal(res.trips[1].status,'upcoming');
+ assert.equal(res.trips[2].status,'upcoming');
+ assert.ok(C.canRate(res.trips[0]));
+ assert.deepEqual(C.reportTrips(res.trips,'l1',null).map(t=>t.id),['b1']);
 });

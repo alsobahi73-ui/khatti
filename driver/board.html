@@ -9,7 +9,7 @@
   const cloud=window.KhattiCloud;
   const isCloud=()=>Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
   const inWin=()=>{const l=K.line(lineId)||LINES[0]||{go:"07:00",back:"14:30"};return KhattiCore.inTripWindow(l.go||"07:00",l.back||"14:30")};
-  let watchId=null,winTimer=null,gpsNote="";
+  let watchId=null,winTimer=null,gpsNote="",locSyncFailed=false,confirmEnd=false;
   function stopWatch(){
     if(watchId!==null&&typeof navigator!=="undefined"&&navigator.geolocation&&typeof navigator.geolocation.clearWatch==="function"){
       navigator.geolocation.clearWatch(watchId);
@@ -33,7 +33,12 @@
         if(!KhattiCore.point([lat,lng]))return;
         const rawSpd=pos.coords.speed;
         const spd=Number.isFinite(rawSpd)&&rawSpd>=0?Math.round(rawSpd*3.6):0;
-        cloud.pushLocation(lineId,"driver",K.dname(),lat,lng,spd).catch(()=>{});
+        cloud.pushLocation(lineId,"driver",K.dname(),lat,lng,spd).then(ok=>{
+          if(ok){locSyncFailed=false;}
+          else if(!locSyncFailed){locSyncFailed=true;K.toast("تعذّر مزامنة الموقع سحابيًا؛ يستمر التتبع محليًا");}
+        }).catch(()=>{
+          if(!locSyncFailed){locSyncFailed=true;K.toast("تعذّر مزامنة الموقع سحابيًا؛ يستمر التتبع محليًا");}
+        });
       },err=>{
         stopWatch();
         gpsNote=(err&&err.code===1)?"رُفض إذن الموقع؛ يستمر الوضع التجريبي المحلي.":"تعذّر تحديد الموقع؛ يستمر الوضع التجريبي المحلي.";
@@ -89,8 +94,27 @@ ${gpsNote?`<div class="note" id="driver-gps-note" style="margin-bottom:8px">${K.
 <div class="row"><button class="btn btn-a grow" id="verify">تحقق وسجّل الصعود ✓</button><button class="btn btn-g" id="scan">📷 مسح QR</button></div></div>
 <div class="card"><h3>⏳ بانتظار الصعود (${bs.length})</h3>
 ${bs.length?bs.map(b=>{const l=K.line(b.lineId)||{from:"",to:""};return `<div style="padding:6px 0;border-bottom:1px solid #e2e8f0"><div class="row"><span>🧑‍🎓 ${K.esc(b.passengerName||K.pname())}</span><span class="grow"></span><span class="mut">${K.esc(l.from)} ← ${K.esc(l.to)} • ${K.esc(b.type||b.plan||"")}</span></div>${payInfo(b)}</div>`}).join(""):'<div class="mut">لا توجد حجوزات بانتظار الصعود.</div>'}</div>
-${done.length?`<div class="card"><h3>✅ صعدوا (${done.length})</h3>${done.map(b=>`<div style="padding:6px 0;border-bottom:1px solid #e2e8f0"><div class="mut">✓ ${K.esc(b.boardName||b.passengerName||"راكب")} — ${K.esc(b.boardAt||"")}</div>${payInfo(b)}</div>`).join("")}</div>`:""}`;
+${done.length?`<div class="card"><h3>✅ صعدوا (${done.length})</h3>${done.map(b=>`<div style="padding:6px 0;border-bottom:1px solid #e2e8f0"><div class="mut">✓ ${K.esc(b.boardName||b.passengerName||"راكب")} — ${K.esc(b.boardAt||"")}</div>${payInfo(b)}</div>`).join("")}</div>`:""}
+<div class="card"><button type="button" class="btn ${confirmEnd?'btn-p':'btn-a'}" id="complete-trip" style="width:100%">${confirmEnd?"تأكيد الإنهاء؟":"إنهاء الرحلة"}</button></div>`;
 $$(".confirm-pay").forEach(btn=>{btn.onclick=()=>confirmPayment(btn.dataset.id)});
+$("#complete-trip").onclick=()=>{
+  if(!confirmEnd){
+    confirmEnd=true;
+    $("#complete-trip").textContent="تأكيد الإنهاء؟";
+    return;
+  }
+  confirmEnd=false;
+  const res=KhattiCore.completeLineTrips(MYDRIVER.lineId,K.get("bookings",[]),K.get("trips",[]));
+  try{K.commit({bookings:res.bookings,trips:res.trips})}catch(e){K.toast("تعذّر حفظ إنهاء الرحلة محليًا");render();return}
+  K.toast("تم إنهاء الرحلة محليًا ✓");
+  const cloudReady=isCloud();
+  if(cloud&&typeof cloud.pushBooking==="function"){
+    res.completedBookings.forEach(bk=>{
+      cloud.pushBooking(bk).then(ok=>{if(cloudReady&&!ok)K.toast("تعذّر مزامنة الحجز سحابيًا؛ تم الحفظ محليًا")}).catch(()=>{if(cloudReady)K.toast("تعذّر مزامنة الحجز سحابيًا؛ تم الحفظ محليًا")});
+    });
+  }
+  render();
+};
 $("#verify").onclick=()=>{
 const pin=$("#pin").value.trim();
 if(!/^\d{4}$/.test(pin)){K.toast("أدخل رمزًا من 4 أرقام");return}
