@@ -16,9 +16,9 @@
 <div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">لا توجد خطوط تجريبية مطابقة. احفظ طلبًا محليًا للتجربة فقط؛ لا تُرسل إشعارات فعلية.</p><button class="btn btn-a" id="notifybtn">حفظ طلب تجريبي</button></div>
 </main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/locations.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/locations.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/data-source.js"></script><script src="../assets/app.js"></script>
 <script>
-(function(){
+(async function(){
 if(!K.access())return;
 K.page("بحث عن خط","../index.html");
 K.holBanner();
@@ -28,7 +28,8 @@ KhattiLocations.forEach(g=>governorate.add(new Option(g.name,g.name)));
 function selectedLocation(){return KhattiLocations.find(g=>g.name===governorate.value)||KhattiLocations[0]}
 function updateCities(){const region=selectedLocation();area.replaceChildren(new Option('كل المدن والمناطق',''));region.cities.forEach(city=>area.add(new Option(city,city)));document.getElementById('cities-status').textContent='مدن ومناطق رئيسية في '+region.name}
 updateCities();
-[...new Set(LINES.map(l=>l.to))].forEach(u=>uni.add(new Option(u,u)));
+const loadedLines=await loadLines();
+[...new Set(loadedLines.map(l=>l.to))].forEach(u=>uni.add(new Option(u,u)));
 let fc="",pin=null,pmap=null,pinMk=null;
 $("#fcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#fcomp .chip").forEach(c=>{c.classList.remove("on");c.setAttribute("aria-pressed","false")});b.classList.add("on");b.setAttribute("aria-pressed","true");fc=b.dataset.c;doSearch()});
 $("#go").onclick=doSearch;$("#gov").onchange=()=>{updateCities();uni.value='';pin=null;if(pinMk){pinMk.remove();pinMk=null}if(pmap)pmap.setView(selectedLocation().center,11);doSearch()};
@@ -36,7 +37,7 @@ area.onchange=doSearch;uni.onchange=doSearch;
 function doSearch(){
  const g=$("#gov").value;const box=$("#results"),nt=$("#notify");box.innerHTML="";
  if(g!=="بغداد"){nt.style.display="block";return}
- let ls=LINES.map(l=>K.line(l.id));
+ let ls=loadedLines.map(l=>K.line(l.id)||l);
  if(area.value)ls=ls.filter(l=>l.from===area.value);
  if(uni.value)ls=ls.filter(l=>l.to===uni.value);
  if(fc)ls=ls.filter(l=>l.comp===fc);
