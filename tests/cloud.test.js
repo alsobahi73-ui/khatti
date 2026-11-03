@@ -114,3 +114,135 @@ test('fetchLines returns null when unconfigured or on fetch/response error, and 
     globalThis.fetch = origFetch;
   }
 });
+
+test('pushBooking returns false when unconfigured and sends payment fields in request body', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    let fetchCalled = false;
+    globalThis.fetch = async () => { fetchCalled = true; return { ok: true }; };
+
+    // 1. Unconfigured -> returns false without calling fetch
+    assert.equal(await KhattiCloud.pushBooking({ id: 'b1' }), false);
+    assert.equal(fetchCalled, false);
+
+    // Configure valid url and key
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    const payloads = [];
+    globalThis.fetch = async (_url, opts) => {
+      payloads.push(JSON.parse(opts.body));
+      return { ok: true };
+    };
+
+    // 2. Reads payment fields from booking.payment (method/status/ref)
+    assert.equal(await KhattiCloud.pushBooking({
+      id: 'b1',
+      lineId: 'l1',
+      passengerName: 'سارة علي',
+      phone: '07701112233',
+      plan: 'شهري',
+      payment: { method: 'zaincash', status: 'paid', ref: 'ZC-123' }
+    }), true);
+    assert.equal(payloads[0].pay_method, 'zaincash');
+    assert.equal(payloads[0].pay_status, 'paid');
+    assert.equal(payloads[0].pay_ref, 'ZC-123');
+
+    // 3. Falls back to flat fields pay_method, pay_status, pay_ref
+    assert.equal(await KhattiCloud.pushBooking({
+      id: 'b2',
+      pay_method: 'asiahawala',
+      pay_status: 'paid',
+      pay_ref: 'AH-456'
+    }), true);
+    assert.equal(payloads[1].pay_method, 'asiahawala');
+    assert.equal(payloads[1].pay_status, 'paid');
+    assert.equal(payloads[1].pay_ref, 'AH-456');
+
+    // 4. Uses defaults ('cash', 'pending', '') when payment info is omitted
+    assert.equal(await KhattiCloud.pushBooking({ id: 'b3' }), true);
+    assert.equal(payloads[2].pay_method, 'cash');
+    assert.equal(payloads[2].pay_status, 'pending');
+    assert.equal(payloads[2].pay_ref, '');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('pushRating and pullRatings handle unconfigured state, composite ID, payload fields, and row mapping', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    let fetchCalled = false;
+    globalThis.fetch = async () => { fetchCalled = true; return { ok: true, json: async () => [] }; };
+
+    // 1. Unconfigured -> pushRating returns false, pullRatings returns [] without calling fetch
+    assert.equal(await KhattiCloud.pushRating({ tripId: 't1', lineId: 'l1', role: 'passenger', stars: 5, comment: 'ممتاز' }), false);
+    assert.deepEqual(await KhattiCloud.pullRatings('t1'), []);
+    assert.equal(fetchCalled, false);
+
+    // Configure valid url and key
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    // 2. pushRating sends composite id `${tripId}:${role}`, role, stars, comment with merge-duplicates
+    let capturedPushUrl = '';
+    let capturedPushOpts = null;
+    globalThis.fetch = async (url, opts) => {
+      capturedPushUrl = url;
+      capturedPushOpts = opts;
+      return { ok: true };
+    };
+
+    const pushed = await KhattiCloud.pushRating({
+      tripId: 't1',
+      lineId: 'l1',
+      role: 'driver',
+      stars: 4,
+      comment: 'راكب ملتزم بالوقت'
+    });
+    assert.equal(pushed, true);
+    assert.equal(capturedPushUrl, 'https://test-proj.supabase.co/rest/v1/khatti_ratings');
+    assert.equal(capturedPushOpts.method, 'POST');
+    assert.equal(capturedPushOpts.headers.Prefer, 'resolution=merge-duplicates');
+    const body = JSON.parse(capturedPushOpts.body);
+    assert.equal(body.id, 't1:driver');
+    assert.equal(body.trip_id, 't1');
+    assert.equal(body.line_id, 'l1');
+    assert.equal(body.rater_role, 'driver');
+    assert.strictEqual(body.stars, 4);
+    assert.equal(body.comment, 'راكب ملتزم بالوقت');
+
+    // 3. pullRatings filters by trip_id and maps rows to {role, stars, comment}
+    let capturedPullUrl = '';
+    globalThis.fetch = async (url) => {
+      capturedPullUrl = url;
+      return {
+        ok: true,
+        json: async () => ([
+          { id: 't1:passenger', trip_id: 't1', line_id: 'l1', rater_role: 'passenger', stars: 5, comment: 'رحلة مريحة' },
+          { id: 't1:driver', trip_id: 't1', line_id: 'l1', rater_role: 'driver', stars: 4, comment: '' }
+        ])
+      };
+    };
+
+    const ratings = await KhattiCloud.pullRatings('t1');
+    assert.equal(capturedPullUrl, 'https://test-proj.supabase.co/rest/v1/khatti_ratings?trip_id=eq.t1&select=*');
+    assert.deepEqual(ratings, [
+      { role: 'passenger', stars: 5, comment: 'رحلة مريحة' },
+      { role: 'driver', stars: 4, comment: '' }
+    ]);
+
+    // 4. Error / non-OK response returns false for pushRating and [] for pullRatings
+    globalThis.fetch = async () => ({ ok: false, status: 500 });
+    assert.equal(await KhattiCloud.pushRating({ tripId: 't1', lineId: 'l1', role: 'passenger', stars: 5 }), false);
+    assert.deepEqual(await KhattiCloud.pullRatings('t1'), []);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
