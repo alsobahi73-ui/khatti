@@ -70,7 +70,8 @@ test('fetchLines returns null when unconfigured or on fetch/response error, and 
     };
 
     const lines = await KhattiCloud.fetchLines();
-    assert.equal(capturedUrl, 'https://test-proj.supabase.co/rest/v1/khatti_lines?select=*');
+    assert.ok(capturedUrl.startsWith('https://test-proj.supabase.co/rest/v1/khatti_lines?select='));
+    assert.ok(!capturedUrl.includes('select=*') && !capturedUrl.split('?select=')[1].split(',').includes('phone'));
     assert.equal(capturedHeaders.apikey, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key');
     assert.equal(capturedHeaders.Authorization, 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key');
     assert.ok(Array.isArray(lines));
@@ -82,7 +83,7 @@ test('fetchLines returns null when unconfigured or on fetch/response error, and 
     assert.equal(l.to, 'جامعة بغداد (الجادرية)');
     assert.equal(l.driver, 'أبو محمد الحسني');
     assert.equal(l.driverName, 'أبو محمد الحسني');
-    assert.equal(l.phone, '07701234567');
+    assert.equal(l.phone, undefined);
     assert.equal(l.vehicle, 'تويوتا هايس 2022 (14 راكب)');
     assert.equal(l.plate, 'بغداد 45612 / أ');
     assert.equal(l.comp, 'mixed');
