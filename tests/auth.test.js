@@ -1,0 +1,189 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const KhattiAuth = require('../assets/auth');
+const KhattiCloud = require('../assets/cloud');
+
+function setupEnv() {
+  const store = {};
+  globalThis.localStorage = {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = String(v); },
+    removeItem: k => { delete store[k]; },
+    clear: () => { for (const k of Object.keys(store)) delete store[k]; }
+  };
+  return store;
+}
+
+test('isSessionValid and getSession enforce >= 60s margin and refresh once when expiring/expired', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    const nowSec = 1700000000;
+    const nowMs = nowSec * 1000;
+
+    // 1. Valid when expires_at is >= 60s in the future
+    assert.equal(KhattiAuth.isSessionValid({ access_token: 'tok', expires_at: nowSec + 60 }, nowMs), true);
+    assert.equal(KhattiAuth.isSessionValid({ access_token: 'tok', expires_at: nowSec + 300 }, nowMs), true);
+
+    // 2. Invalid when expires_at is < 60s away or missing token
+    assert.equal(KhattiAuth.isSessionValid({ access_token: 'tok', expires_at: nowSec + 59 }, nowMs), false);
+    assert.equal(KhattiAuth.isSessionValid({ access_token: 'tok', expires_at: nowSec - 10 }, nowMs), false);
+    assert.equal(KhattiAuth.isSessionValid({ access_token: '', expires_at: nowSec + 300 }, nowMs), false);
+    assert.equal(KhattiAuth.isSessionValid(null, nowMs), false);
+
+    // 3. getSession returns stored session without calling fetch when valid (>= 60s left)
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    const futureExp = Math.floor(Date.now() / 1000) + 120;
+    localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+      access_token: 'valid_tok',
+      refresh_token: 'ref_tok',
+      expires_at: futureExp,
+      user: { id: 'u1', email: 'a@b.com', role: 'passenger' }
+    }));
+
+    let fetchCount = 0;
+    globalThis.fetch = async () => { fetchCount++; return { ok: true }; };
+    const sess1 = await KhattiAuth.getSession();
+    assert.equal(sess1.access_token, 'valid_tok');
+    assert.equal(fetchCount, 0);
+
+    // 4. getSession refreshes once when expires_at is < 60s from now
+    const nearExp = Math.floor(Date.now() / 1000) + 30;
+    localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+      access_token: 'expiring_tok',
+      refresh_token: 'ref_tok_2',
+      expires_at: nearExp,
+      user: { id: 'u1', email: 'a@b.com', role: 'driver' }
+    }));
+
+    let refreshUrl = '';
+    globalThis.fetch = async (url) => {
+      fetchCount++;
+      refreshUrl = url;
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: 'refreshed_tok',
+          refresh_token: 'ref_tok_3',
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          user: { id: 'u1', email: 'a@b.com', user_metadata: { role: 'driver' } }
+        })
+      };
+    };
+
+    const sess2 = await KhattiAuth.getSession();
+    assert.equal(fetchCount, 1);
+    assert.equal(refreshUrl, 'https://test-proj.supabase.co/auth/v1/token?grant_type=refresh_token');
+    assert.equal(sess2.access_token, 'refreshed_tok');
+    assert.equal(sess2.user.role, 'driver');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('translateError translates common GoTrue errors into clear Arabic messages', () => {
+  assert.match(
+    KhattiAuth.translateError({ error: 'invalid_grant', error_description: 'Invalid login credentials' }),
+    /بيانات دخول خاطئة/
+  );
+  assert.match(
+    KhattiAuth.translateError({ error_code: 'email_not_confirmed', msg: 'Email not confirmed' }),
+    /البريد غير مؤكّد بعد/
+  );
+  assert.match(
+    KhattiAuth.translateError({ code: 'user_already_exists', message: 'User already registered' }),
+    /بريد مسجّل مسبقًا/
+  );
+  assert.match(
+    KhattiAuth.translateError({ error_code: 'weak_password', message: 'Password should be at least 6 characters' }),
+    /كلمة مرور ضعيفة/
+  );
+});
+
+test('authHeaders always returns apikey and adds Authorization Bearer when session exists', () => {
+  setupEnv();
+  localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+    url: 'https://test-proj.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+  }));
+
+  // 1. Without session -> only apikey
+  const hNoSess = KhattiAuth.authHeaders();
+  assert.deepEqual(hNoSess, {
+    apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+  });
+  assert.equal('Authorization' in hNoSess, false);
+
+  // 2. With session -> apikey + Authorization Bearer
+  localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+    access_token: 'jwt_user_token_123',
+    refresh_token: 'ref_123',
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    user: { id: 'u-99', email: 'driver@khatti.iq', role: 'driver' }
+  }));
+
+  const hWithSess = KhattiAuth.authHeaders();
+  assert.deepEqual(hWithSess, {
+    apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key',
+    Authorization: 'Bearer jwt_user_token_123'
+  });
+});
+
+test('stripLinePhone and fetchLines remove phone for non-owners and keep it only when session user.id === line.driver_id', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    // 1. Pure unit check on stripLinePhone
+    const sampleLine = { id: 'l1', driver_id: 'drv-uuid-1', phone: '07701234567', from: 'الكرادة' };
+    const strippedAnon = KhattiAuth.stripLinePhone(sampleLine, null);
+    assert.equal('phone' in strippedAnon, false);
+
+    const strippedOther = KhattiAuth.stripLinePhone(sampleLine, {
+      user: { id: 'other-uuid', role: 'passenger' }
+    });
+    assert.equal('phone' in strippedOther, false);
+
+    const keptOwner = KhattiAuth.stripLinePhone(sampleLine, {
+      user: { id: 'drv-uuid-1', role: 'driver' }
+    });
+    assert.equal(keptOwner.phone, '07701234567');
+
+    // 2. fetchLines requests explicit columns without phone and strips phone for non-owner
+    let requestedUrl = '';
+    globalThis.fetch = async (url) => {
+      requestedUrl = url;
+      return {
+        ok: true,
+        json: async () => ([
+          { id: 'l1', driver_id: 'drv-uuid-1', driver_name: 'أبو محمد', phone: '07701112222', from_area: 'الكرادة', to_dest: 'الجادرية' },
+          { id: 'l2', driver_id: 'drv-uuid-2', driver_name: 'سائق آخر', phone: '07709998888', from_area: 'المنصور', to_dest: 'الجادرية' }
+        ])
+      };
+    };
+
+    localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+      access_token: 'tok_drv_1',
+      refresh_token: 'ref_1',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 'drv-uuid-1', email: 'd1@khatti.iq', role: 'driver' }
+    }));
+
+    const lines = await KhattiCloud.fetchLines();
+    assert.equal(requestedUrl.includes('select=*'), false);
+    assert.equal(requestedUrl.includes('phone'), false);
+    assert.equal(lines.length, 2);
+    assert.equal(lines[0].phone, '07701112222'); // owner keeps phone
+    assert.equal('phone' in lines[1], false);    // non-owner has phone deleted
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
