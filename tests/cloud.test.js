@@ -94,7 +94,16 @@ test('fetchLines returns null when unconfigured or on fetch/response error, and 
     assert.strictEqual(l.rating, 4.9);
     assert.strictEqual(l.rc, 18);
     assert.strictEqual(l.trusted, true);
+    assert.strictEqual(l.verified, false);
     assert.deepEqual(l.pickups, []);
+
+    // Verify verified=true is passed when row has verified: true
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ([{ id: 'l2', verified: true }])
+    });
+    const verifiedLines = await KhattiCloud.fetchLines();
+    assert.strictEqual(verifiedLines[0].verified, true);
 
     // 5. AbortSignal is passed and abort/timeout returns null in fetchLines and false in init
     let signalPassed = false;
@@ -242,6 +251,145 @@ test('pushRating and pullRatings handle unconfigured state, composite ID, payloa
     globalThis.fetch = async () => ({ ok: false, status: 500 });
     assert.equal(await KhattiCloud.pushRating({ tripId: 't1', lineId: 'l1', role: 'passenger', stars: 5 }), false);
     assert.deepEqual(await KhattiCloud.pullRatings('t1'), []);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('reserveSeats, loadLines _cloud tagging, and K.line cloud vs local seat deduction', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    // 1. Unconfigured reserveSeats returns false without calling fetch
+    let fetchCalled = false;
+    globalThis.fetch = async () => { fetchCalled = true; return { ok: true, json: async () => true }; };
+    assert.equal(await KhattiCloud.reserveSeats('l1', 2), false);
+    assert.equal(fetchCalled, false);
+
+    // Configure cloud
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    // 2. reserveSeats sends POST to /rest/v1/rpc/reserve_seat with AbortSignal and checks res.ok & boolean return
+    let rpcUrl = '';
+    let rpcOpts = null;
+    globalThis.fetch = async (url, opts) => {
+      rpcUrl = url;
+      rpcOpts = opts;
+      return { ok: true, json: async () => true };
+    };
+    assert.equal(await KhattiCloud.reserveSeats('l1', 2), true);
+    assert.equal(rpcUrl, 'https://test-proj.supabase.co/rest/v1/rpc/reserve_seat');
+    assert.equal(rpcOpts.method, 'POST');
+    assert.ok(rpcOpts.signal);
+    assert.deepEqual(JSON.parse(rpcOpts.body), { p_line_id: 'l1', p_seats: 2 });
+
+    // When RPC returns false (insufficient seats) or HTTP error
+    globalThis.fetch = async () => ({ ok: true, json: async () => false });
+    assert.equal(await KhattiCloud.reserveSeats('l1', 3), false);
+
+    globalThis.fetch = async () => ({ ok: false, status: 500, json: async () => true });
+    assert.equal(await KhattiCloud.reserveSeats('l1', 1), false);
+
+    // 3. loadLines tags cloud lines with _cloud=true and K.line skips local deduction only for _cloud lines
+    globalThis.LINES = [
+      { id: 'l1', seats: 14, free: 11 }
+    ];
+    globalThis.COMP = { girls: 'طالبات', boys: 'طلاب', mixed: 'مختلط' };
+    globalThis.KhattiCore = require('../assets/core');
+    globalThis.document = {
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => {}
+    };
+    globalThis.location = { pathname: '/passenger/search.html' };
+    const { loadLines } = require('../assets/data-source');
+    delete require.cache[require.resolve('../assets/app')];
+    const fs = require('node:fs');
+    const vm = require('node:vm');
+    vm.runInThisContext(fs.readFileSync(require.resolve('../assets/app'), 'utf8') + '\n;globalThis.K = K;');
+
+    // Add a local upcoming booking of 2 seats on l1
+    localStorage.setItem('khatti_demo_v1_bookings', JSON.stringify([
+      { id: 'bk_1', lineId: 'l1', when: '07:00', status: 'upcoming', seats: ['مقعد 1', 'مقعد 2'] }
+    ]));
+
+    // Demo line (no _cloud) subtracts 2 seats from 11 -> 9
+    assert.equal(globalThis.K.line('l1').free, 9);
+
+    // Now load cloud lines via loadLines (which sets _cloud=true)
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ([
+        { id: 'l1', from_area: 'الكرادة', to_dest: 'الجادرية', driver_name: 'سائق', phone: '07701234567', vehicle: 'باص', seats: 14, free: 8 }
+      ])
+    });
+    const loaded = await loadLines();
+    assert.equal(loaded[0]._cloud, true);
+    assert.equal(globalThis.LINES[0]._cloud, true);
+    // Cloud line free comes directly from DB (8) without subtracting local 2 seats again
+    assert.equal(globalThis.K.line('l1').free, 8);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('pushLocation, pullLocations, pushAttendance, pushBooking, pushRating enforce 10s AbortSignal and res.ok, deviceId format, and attendance on_conflict', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    // 1. Device ID is generated once, 16 hex chars, persisted in khatti_demo_v1_device_id
+    const devId1 = KhattiCloud.getDeviceId();
+    assert.match(devId1, /^[0-9a-f]{16}$/);
+    assert.equal(localStorage.getItem('khatti_demo_v1_device_id'), devId1);
+    const devId2 = KhattiCloud.getDeviceId();
+    assert.equal(devId2, devId1);
+
+    // 2. pushLocation uses ${lineId}_driver_main for driver and ${lineId}_pax_${deviceId} for passenger, passes signal, checks res.ok
+    const locBodies = [];
+    const signals = [];
+    globalThis.fetch = async (_url, opts) => {
+      signals.push(Boolean(opts && opts.signal));
+      locBodies.push(JSON.parse(opts.body));
+      return { ok: true };
+    };
+    assert.equal(await KhattiCloud.pushLocation('l1', 'driver', 'أبو محمد', 33.3, 44.4, 25), true);
+    assert.equal(await KhattiCloud.pushLocation('l1', 'passenger', 'أحمد', 33.31, 44.41, 0), true);
+    assert.equal(locBodies[0].id, 'l1_driver_main');
+    assert.equal(locBodies[1].id, `l1_pax_${devId1}`);
+    assert.deepEqual(signals, [true, true]);
+
+    // 3. pushAttendance includes on_conflict=student_id,trip_date,line_id and signal
+    let attUrl = '';
+    let attSignal = false;
+    globalThis.fetch = async (url, opts) => {
+      attUrl = url;
+      attSignal = Boolean(opts && opts.signal);
+      return { ok: true };
+    };
+    assert.equal(await KhattiCloud.pushAttendance({ id: 'st_1', name: 'أحمد', stop: 'الكرادة', code: 'KH-2233', status: 'boarded' }, 'l1', '2026-10-15'), true);
+    assert.equal(attUrl, 'https://test-proj.supabase.co/rest/v1/khatti_attendance?on_conflict=student_id,trip_date,line_id');
+    assert.equal(attSignal, true);
+
+    // 4. Non-OK responses return false (or null for pullLocations) and pullLocations passes signal
+    let pullSignal = false;
+    globalThis.fetch = async (_url, opts) => {
+      pullSignal = Boolean(opts && opts.signal);
+      return { ok: false, status: 503 };
+    };
+    assert.equal(await KhattiCloud.pullLocations('l1'), null);
+    assert.equal(pullSignal, true);
+    assert.equal(await KhattiCloud.pushLocation('l1', 'driver', 'أبو محمد', 33.3, 44.4, 0), false);
+    assert.equal(await KhattiCloud.pushAttendance({ id: 'st_1', name: 'أحمد', stop: 'الكرادة', code: 'KH-2233', status: 'waiting' }, 'l1', '2026-10-15'), false);
+    assert.equal(await KhattiCloud.pushBooking({ id: 'b1', lineId: 'l1' }), false);
+    assert.equal(await KhattiCloud.pushRating({ tripId: 't1', lineId: 'l1', role: 'passenger', stars: 5 }), false);
   } finally {
     globalThis.fetch = origFetch;
   }
