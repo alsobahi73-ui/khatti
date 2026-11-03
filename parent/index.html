@@ -86,7 +86,7 @@
       <div class="card">
         <h3>🚘 بيانات السائق المعتمد</h3>
         <p><strong>السائق:</strong> ${K.esc(d.name)} ${K.trusted(d)}</p>
-        <p><strong>الهاتف:</strong> <a href="tel:${K.esc(d.phone)}">${K.esc(d.phone)}</a></p>
+        <p><strong>التواصل:</strong> عبر قنوات الرحلة والتنبيهات داخل التطبيق فقط (لا تُعرض أرقام الهواتف ولا يتم التواصل المباشر)</p>
         <p><strong>المركبة:</strong> ${K.esc(l.vehicle||d.vehicle)} — ${K.esc(d.plate||"")}</p>
         <p><strong>المسار:</strong> ${K.esc(l.from?`${l.from} ↔ ${l.to}`:d.route)}</p>
       </div>
