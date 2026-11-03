@@ -16,8 +16,21 @@
   <div class="card clickable" onclick="location.href='register.html?role=driver'"><h3 id="t-drt">🚘 سائقو الخطوط</h3><p id="t-drs">إدارة حضور الركاب اليومي (صعد/وصل)، استعراض الطلبات المجمعة، ونشر رحلات العطل.</p><button class="btn btn-a" id="t-drb">لوحة السائقين</button></div>
   <div class="card clickable" onclick="location.href='parent/index.html'"><h3 id="t-part">👨‍👩‍👧 بوابة أولياء الأمور</h3><p id="t-pars">اربط حسابك بكود الطالب الخاص وتابع صعود ابنك وموقع الحافلة وتنبيه الـ 5 دقائق.</p><button class="btn btn-g" id="t-parb">متابعة الأبناء</button></div>
 </div>
+
+<details class="card" id="cloud-settings" style="margin-top:14px;">
+  <summary style="cursor:pointer;font-weight:700;">إعدادات الربط السحابي (للمشغّل)</summary>
+  <div style="margin-top:10px;">
+    <div class="field"><label for="cloud-url">رابط المشروع</label><input id="cloud-url" type="url" dir="ltr" placeholder="https://example.supabase.co"></div>
+    <div class="field"><label for="cloud-key">المفتاح</label><input id="cloud-key" type="password" dir="ltr" autocomplete="off" placeholder="مفتاح الواجهة العام"></div>
+    <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-p" id="cloud-save">حفظ</button>
+      <button type="button" class="btn btn-g" id="cloud-test">اختبار الاتصال</button>
+    </div>
+    <div class="mut" id="cloud-status" role="status" aria-live="polite" style="margin-top:8px;"></div>
+  </div>
+</details>
 </main></div>
-<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/cloud.js"></script><script src="assets/app.js"></script>
 <script>
 /* §3.14.3 — مبدّل اللغة عربي/كردي (سوراني) + بوابة التسجيل (§3.12) */
 (function(){
@@ -49,6 +62,43 @@
     const g=document.getElementById("gate-card");
     if(g)g.style.display="none";
   }
+  /* إعدادات الربط السحابي (للمشغّل) */
+  const urlIn=document.getElementById("cloud-url"),keyIn=document.getElementById("cloud-key"),stEl=document.getElementById("cloud-status");
+  const saveBtn=document.getElementById("cloud-save"),testBtn=document.getElementById("cloud-test");
+  const cloud=window.KhattiCloud;
+  if(!cloud){
+    if(saveBtn)saveBtn.disabled=true;
+    if(testBtn)testBtn.disabled=true;
+    if(stEl)stEl.textContent="الربط السحابي غير متاح في هذه الصفحة.";
+    return;
+  }
+  if(stEl&&cloud.isConfigured())stEl.textContent="تم حفظ إعدادات سابقة.";
+  if(saveBtn)saveBtn.onclick=async()=>{
+    const cur=cloud.getConfig();
+    const u=urlIn.value.trim()||cur.url,k=keyIn.value.trim()||cur.key;
+    if(stEl)stEl.textContent="جارٍ الحفظ واختبار الاتصال...";
+    try{
+      const ok=await cloud.saveConfig(u,k);
+      urlIn.value="";keyIn.value="";
+      if(stEl)stEl.textContent=ok?"تم حفظ الإعدادات ونجح الاتصال بالسحابة.":"تم حفظ الإعدادات محلياً، لكن فشل الاتصال بالسحابة.";
+    }catch(e){if(stEl)stEl.textContent="تعذّر حفظ الإعدادات.";}
+  };
+  if(testBtn)testBtn.onclick=async()=>{
+    const hasInput=Boolean(urlIn.value.trim()||keyIn.value.trim());
+    if(stEl)stEl.textContent="جارٍ اختبار الاتصال...";
+    let ok=false;
+    if(hasInput){
+      const cur=cloud.getConfig();
+      const u=urlIn.value.trim()||cur.url,k=keyIn.value.trim()||cur.key;
+      const origGetConfig=cloud.getConfig;
+      cloud.getConfig=()=>({url:String(u||"").trim().replace(/\/+$/,""),key:String(k||"").trim()});
+      try{ok=await cloud.init();}finally{cloud.getConfig=origGetConfig;}
+      if(ok){urlIn.value="";keyIn.value="";}
+    }else{
+      ok=await cloud.init();
+    }
+    if(stEl)stEl.textContent=ok?"نجح الاتصال بالسحابة.":"فشل الاتصال بالسحابة.";
+  };
 })();
 </script>
 </body></html>
