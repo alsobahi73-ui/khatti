@@ -32,12 +32,16 @@
     async init(){
       const cfg = this.getConfig();
       if(!this.isConfigured()) return false;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
       try {
         const res = await fetch(`${cfg.url}/rest/v1/khatti_lines?select=id&limit=1`, {
-          headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` }
+          headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          signal: ctrl.signal
         });
         return res.ok;
       } catch(e){ return false; }
+      finally { clearTimeout(timer); }
     },
 
     /* إرسال الموقع اللحظي للسائق أو الراكب إلى سحابة Supabase */
@@ -82,6 +86,61 @@
       } catch(e){ return null; }
     },
 
+    /* جلب قائمة الخطوط من سحابة Supabase وتحويلها إلى شكل LINES */
+    async fetchLines(){
+      if(!this.isConfigured()) return null;
+      const cfg = this.getConfig();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/khatti_lines?select=*`, {
+          headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          signal: ctrl.signal
+        });
+        if(!res.ok) return null;
+        const rows = await res.json();
+        if(!Array.isArray(rows)) return null;
+        return rows.map(r => {
+          const rObj = r && typeof r === "object" ? r : {};
+          const driver = rObj.driver_name ?? rObj.driver ?? rObj.driverName ?? "";
+          const go = String(rObj.go_time ?? rObj.go ?? "07:00");
+          const back = String(rObj.back_time ?? rObj.back ?? "14:30");
+          const seats = parseInt(rObj.seats, 10);
+          const free = parseInt(rObj.free, 10);
+          const price = parseInt(rObj.price, 10);
+          const rating = parseFloat(rObj.rating);
+          const rc = parseInt(rObj.rc, 10);
+          return {
+            id: String(rObj.id ?? ""),
+            driverId: String(rObj.driver_id ?? rObj.driverId ?? ""),
+            driver: String(driver),
+            driverName: String(driver),
+            phone: String(rObj.phone ?? ""),
+            from: String(rObj.from_area ?? rObj.from ?? ""),
+            to: String(rObj.to_dest ?? rObj.to ?? ""),
+            go,
+            back,
+            times: String(rObj.times ?? `${go} — ${back}`),
+            vehicle: String(rObj.vehicle ?? ""),
+            type: String(rObj.type ?? rObj.vehicle ?? ""),
+            plate: String(rObj.plate ?? ""),
+            comp: String(rObj.comp || "mixed"),
+            price: Number.isFinite(price) ? price : 0,
+            seats: Number.isFinite(seats) ? seats : 0,
+            free: Number.isFinite(free) ? free : (Number.isFinite(seats) ? seats : 0),
+            rating: Number.isFinite(rating) ? rating : 5.0,
+            rc: Number.isFinite(rc) ? rc : 0,
+            trusted: rObj.trusted === undefined ? true : Boolean(rObj.trusted),
+            route: Array.isArray(rObj.route) ? rObj.route : [],
+            pickups: Array.isArray(rObj.pickups) ? rObj.pickups : [],
+            comments: Array.isArray(rObj.comments) ? rObj.comments : [],
+            status: String(rObj.status || "active")
+          };
+        });
+      } catch(e){ return null; }
+      finally { clearTimeout(timer); }
+    },
+
     /* مزامنة حالة حضور/غياب أو صعود الطالب سحابياً */
     async pushAttendance(student, lineId="l1", tripDate="2026-10-15"){
       if(!this.isConfigured() || !student) return false;
@@ -108,6 +167,100 @@
         });
         return true;
       } catch(e){ return false; }
+    },
+
+    /* مزامنة الحجز والاشتراك سحابياً في جدول khatti_bookings */
+    async pushBooking(booking){
+      if(!this.isConfigured() || !booking || typeof booking !== "object") return false;
+      const cfg = this.getConfig();
+      const pay = booking.payment && typeof booking.payment === "object" ? booking.payment : {};
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/khatti_bookings`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: cfg.key,
+            Authorization: `Bearer ${cfg.key}`,
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            id: String(booking.id ?? ""),
+            line_id: String(booking.line_id ?? booking.lineId ?? ""),
+            passenger_name: String(booking.passenger_name ?? booking.passengerName ?? booking.name ?? ""),
+            phone: String(booking.phone ?? ""),
+            plan_label: String(booking.plan_label ?? booking.planLabel ?? booking.plan ?? ""),
+            seats: Array.isArray(booking.seats) ? booking.seats : [],
+            pickup: String(booking.pickup ?? ""),
+            return_shift: String(booking.return_shift ?? booking.returnShift ?? "14:30"),
+            status: String(booking.status ?? "upcoming"),
+            pay_method: String(pay.method ?? booking.pay_method ?? "cash"),
+            pay_status: String(pay.status ?? booking.pay_status ?? "pending"),
+            pay_ref: String(pay.ref ?? booking.pay_ref ?? "")
+          }),
+          signal: ctrl.signal
+        });
+        return res ? res.ok !== false : true;
+      } catch(e){ return false; }
+      finally { clearTimeout(timer); }
+    },
+
+    /* مزامنة تقييم الرحلة (راكب أو سائق) سحابياً في جدول khatti_ratings */
+    async pushRating(rating){
+      if(!this.isConfigured() || !rating || typeof rating !== "object") return false;
+      const tripId = String(rating.tripId ?? rating.trip_id ?? "").trim();
+      const role = String(rating.role ?? rating.rater_role ?? "").trim();
+      if(!tripId || !role) return false;
+      const cfg = this.getConfig();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/khatti_ratings`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: cfg.key,
+            Authorization: `Bearer ${cfg.key}`,
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            id: `${tripId}:${role}`,
+            trip_id: tripId,
+            line_id: String(rating.lineId ?? rating.line_id ?? ""),
+            rater_role: role,
+            stars: Number(rating.stars),
+            comment: String(rating.comment ?? "")
+          }),
+          signal: ctrl.signal
+        });
+        return res ? res.ok !== false : true;
+      } catch(e){ return false; }
+      finally { clearTimeout(timer); }
+    },
+
+    /* جلب تقييمات رحلة معينة من جدول khatti_ratings */
+    async pullRatings(tripId){
+      const cleanTripId = String(tripId ?? "").trim();
+      if(!this.isConfigured() || !cleanTripId) return [];
+      const cfg = this.getConfig();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/khatti_ratings?trip_id=eq.${encodeURIComponent(cleanTripId)}&select=*`, {
+          headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          signal: ctrl.signal
+        });
+        if(!res || !res.ok) return [];
+        const rows = await res.json();
+        if(!Array.isArray(rows)) return [];
+        return rows.filter(r => r && typeof r === "object").map(r => ({
+          role: String(r.rater_role ?? r.role ?? ""),
+          stars: Number(r.stars),
+          comment: String(r.comment ?? "")
+        }));
+      } catch(e){ return []; }
+      finally { clearTimeout(timer); }
     }
   };
 
@@ -118,6 +271,7 @@
     });
   }
 
+  if(typeof window !== "undefined") window.KhattiCloud = KhattiCloud;
   if(typeof module !== "undefined" && module.exports) module.exports = KhattiCloud;
   else root.KhattiCloud = KhattiCloud;
 })(typeof globalThis !== "undefined" ? globalThis : this);

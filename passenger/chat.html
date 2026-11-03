@@ -10,14 +10,17 @@
   if(!l){K.missing();return;}
   function render(){
     const msgs=K.get("chat_"+l.id,[]);
+    const inWin=KhattiCore.inTripWindow(l.go||"07:00",l.back||"14:30");
     $("#app").innerHTML=`
       <div class="card">
         <p class="mut">محادثة تجريبية محلية؛ الرسائل لا تُرسل إلى سائق أو جهاز آخر.</p><h3>💬 محادثة ${K.esc(l.from)} ← ${K.esc(l.to)}</h3>
+        ${inWin?"":`<div class="note" id="chat-window-msg" style="margin:8px 0;">الدردشة مغلقة خارج نافذة الرحلة</div>`}
         <div id="cbox" style="margin:10px 0;">${msgs.map(m=>`<div class="note"><b>${m.me?'أنا':K.esc(l.driver)}:</b> ${K.esc(m.t)} <span class="mut">(${K.esc(m.time)})</span></div>`).join("")}</div>
-        <div class="row"><input id="cin" aria-label="رسالة تجريبية" maxlength="2000" placeholder="اكتب رسالتك..." style="flex:1;"><button class="btn btn-p" id="csend">حفظ محلي</button></div>
+        <div class="row"><input id="cin" aria-label="رسالة تجريبية" maxlength="2000" placeholder="${inWin?'اكتب رسالتك...':'الدردشة مغلقة خارج نافذة الرحلة'}" style="flex:1;" ${inWin?"":"disabled"}><button class="btn btn-p" id="csend" ${inWin?"":"disabled"}>حفظ محلي</button></div>
       </div>
     `;
     $("#csend").onclick=function(){
+      if(!KhattiCore.inTripWindow(l.go||"07:00",l.back||"14:30"))return;
       const v=$("#cin").value.trim();
       if(!v)return;
       msgs.push({me:1,t:v,time:"الآن"});

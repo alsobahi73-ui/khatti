@@ -1,21 +1,96 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تحقق الصعود — خطّي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
   K.page("تحقق صعود الركاب","index.html");
+  const lineId=MYDRIVER.lineId||"l1";
+  const cloud=window.KhattiCloud;
+  const isCloud=()=>Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
+  const inWin=()=>{const l=K.line(lineId)||LINES[0]||{go:"07:00",back:"14:30"};return KhattiCore.inTripWindow(l.go||"07:00",l.back||"14:30")};
+  let watchId=null,winTimer=null,gpsNote="";
+  function stopWatch(){
+    if(watchId!==null&&typeof navigator!=="undefined"&&navigator.geolocation&&typeof navigator.geolocation.clearWatch==="function"){
+      navigator.geolocation.clearWatch(watchId);
+    }
+    watchId=null;
+  }
+  function startWatch(){
+    if(!isCloud())return;
+    if(!inWin()){stopWatch();return}
+    if(watchId!==null)return;
+    if(typeof navigator==="undefined"||!navigator.geolocation||typeof navigator.geolocation.watchPosition!=="function"){
+      gpsNote="المتصفح لا يدعم تحديد الموقع؛ يستمر الوضع التجريبي المحلي.";
+      K.toast(gpsNote);
+      return;
+    }
+    try{
+      watchId=navigator.geolocation.watchPosition(pos=>{
+        if(!isCloud()||!inWin()){stopWatch();return}
+        const lat=pos&&pos.coords?Number(pos.coords.latitude):NaN;
+        const lng=pos&&pos.coords?Number(pos.coords.longitude):NaN;
+        if(!KhattiCore.point([lat,lng]))return;
+        const rawSpd=pos.coords.speed;
+        const spd=Number.isFinite(rawSpd)&&rawSpd>=0?Math.round(rawSpd*3.6):0;
+        cloud.pushLocation(lineId,"driver",K.dname(),lat,lng,spd).catch(()=>{});
+      },err=>{
+        stopWatch();
+        gpsNote=(err&&err.code===1)?"رُفض إذن الموقع؛ يستمر الوضع التجريبي المحلي.":"تعذّر تحديد الموقع؛ يستمر الوضع التجريبي المحلي.";
+        K.toast(gpsNote);
+        render();
+      },{enableHighAccuracy:true,maximumAge:5000,timeout:10000});
+      if(!inWin())stopWatch();
+    }catch(e){
+      stopWatch();
+      gpsNote="تعذّر تشغيل تحديد الموقع؛ يستمر الوضع التجريبي المحلي.";
+      K.toast(gpsNote);
+    }
+  }
+  if(isCloud()){
+    startWatch();
+    winTimer=setInterval(()=>{if(!inWin())stopWatch();else startWatch()},15000);
+  }
+  window.addEventListener("pagehide",()=>{if(winTimer){clearInterval(winTimer);winTimer=null}stopWatch()},{once:true});
+const PAY_LABELS={cash:"كاش عند السائق",zaincash:"زين كاش مسبق",asiahawala:"آسيا حوالة مسبق"};
+function payInfo(b){
+  const p=KhattiCore.record(b.payment)?b.payment:{method:"cash",status:"pending",ref:""};
+  const mLabel=PAY_LABELS[p.method]||p.method||"كاش عند السائق";
+  const st=p.status==="paid"?"paid":"pending";
+  const stLabel=st==="paid"?"مدفوع (paid) ✓":"بانتظار الدفع (pending)";
+  const refTxt=p.ref?` • مرجع: ${K.esc(p.ref)}`:"";
+  return `<div class="row" style="margin-top:4px;font-size:13px;"><span class="mut">💳 الدفع: ${K.esc(mLabel)}${refTxt} — الحالة: <b>${stLabel}</b></span><span class="grow"></span>${st!=="paid"?`<button type="button" class="btn btn-p confirm-pay" data-id="${K.esc(b.id)}" style="padding:4px 10px;font-size:12px;">تأكيد استلام الدفع</button>`:""}</div>`;
+}
+function confirmPayment(bookingId){
+  const bs=K.get("bookings",[]);
+  const target=bs.find(x=>x.id===bookingId);
+  if(!target)return;
+  const prev=KhattiCore.record(target.payment)?target.payment:{method:"cash",ref:""};
+  target.payment={...prev,status:"paid"};
+  const tr=K.get("trips",[]);
+  const t=tr.find(x=>x.id===bookingId);
+  if(t)t.payment={...target.payment};
+  try{K.commit({bookings:bs,trips:tr})}catch(e){K.toast("تعذّر حفظ تأكيد الدفع محليًا");return}
+  K.toast("تم تأكيد استلام الدفع محليًا ✓");
+  const cloudReady=isCloud();
+  if(cloud&&typeof cloud.pushBooking==="function"){
+    cloud.pushBooking(target).then(ok=>{if(cloudReady&&!ok)K.toast("تعذّر مزامنة الحجز سحابيًا؛ تم الحفظ محليًا")}).catch(()=>{if(cloudReady)K.toast("تعذّر مزامنة الحجز سحابيًا؛ تم الحفظ محليًا")});
+  }
+  render();
+}
 function render(){
 const bs=K.get("bookings",[]).filter(b=>b.lineId===MYDRIVER.lineId&&b.status==="upcoming"&&!b.boarded);
 const done=K.get("bookings",[]).filter(b=>b.lineId===MYDRIVER.lineId&&b.status==="upcoming"&&b.boarded);
 $("#app").innerHTML=`
+${gpsNote?`<div class="note" id="driver-gps-note" style="margin-bottom:8px">${K.esc(gpsNote)}</div>`:""}
 <div class="card"><h3>🎫 تحقق من صعود الراكب</h3>
 <div class="mut" style="font-size:13px;margin-bottom:8px">محاكاة محلية فقط، دون تحقق أمني بين الأجهزة. اطلب من الراكب رمز الصعود (PIN) الظاهر في حجزه — لا توجد قراءة QR فعلية في هذه النسخة.</div>
 <div class="field"><label for="pin">رمز الصعود (4 أرقام)</label><input id="pin" inputmode="numeric" maxlength="4" placeholder="••••" dir="ltr" style="text-align:center;letter-spacing:8px;font-size:22px"></div>
 <div class="row"><button class="btn btn-a grow" id="verify">تحقق وسجّل الصعود ✓</button><button class="btn btn-g" id="scan">📷 مسح QR</button></div></div>
 <div class="card"><h3>⏳ بانتظار الصعود (${bs.length})</h3>
-${bs.length?bs.map(b=>{const l=K.line(b.lineId);return `<div class="row" style="padding:6px 0;border-bottom:1px solid #e2e8f0"><span>🧑‍🎓 ${K.esc(K.pname())}</span><span class="grow"></span><span class="mut">${K.esc(l.from)} ← ${K.esc(l.to)} • ${K.esc(b.type||"")}</span></div>`}).join(""):'<div class="mut">لا توجد حجوزات بانتظار الصعود.</div>'}</div>
-${done.length?`<div class="card"><h3>✅ صعدوا (${done.length})</h3>${done.map(b=>`<div class="mut">✓ ${K.esc(b.boardName||"راكب")} — ${K.esc(b.boardAt||"")}</div>`).join("")}</div>`:""}`;
+${bs.length?bs.map(b=>{const l=K.line(b.lineId)||{from:"",to:""};return `<div style="padding:6px 0;border-bottom:1px solid #e2e8f0"><div class="row"><span>🧑‍🎓 ${K.esc(b.passengerName||K.pname())}</span><span class="grow"></span><span class="mut">${K.esc(l.from)} ← ${K.esc(l.to)} • ${K.esc(b.type||b.plan||"")}</span></div>${payInfo(b)}</div>`}).join(""):'<div class="mut">لا توجد حجوزات بانتظار الصعود.</div>'}</div>
+${done.length?`<div class="card"><h3>✅ صعدوا (${done.length})</h3>${done.map(b=>`<div style="padding:6px 0;border-bottom:1px solid #e2e8f0"><div class="mut">✓ ${K.esc(b.boardName||b.passengerName||"راكب")} — ${K.esc(b.boardAt||"")}</div>${payInfo(b)}</div>`).join("")}</div>`:""}`;
+$$(".confirm-pay").forEach(btn=>{btn.onclick=()=>confirmPayment(btn.dataset.id)});
 $("#verify").onclick=()=>{
 const pin=$("#pin").value.trim();
 if(!/^\d{4}$/.test(pin)){K.toast("أدخل رمزًا من 4 أرقام");return}
@@ -24,6 +99,11 @@ if(!b){K.toast("رمز غير صالح أو مستخدم مسبقًا ❌");retu
 b.boarded=true;b.boardAt=new Date().toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"});b.boardName=K.pname();
 const tr=K.get("trips",[]);const t=tr.find(x=>x.id===b.id&&x.lineId===b.lineId);if(t)t.boarded=true;
 try{K.commit({bookings:bs,trips:tr,boardEv:{name:b.boardName,time:b.boardAt}})}catch(e){K.toast("لم تكتمل العملية؛ تعذّر حفظ الصعود التجريبي");return}
+if(isCloud()&&typeof cloud.pushAttendance==="function"){
+  const att=K.attendance(b.lineId||lineId);
+  const st=att.find(s=>s.name===b.boardName)||att[0]||{id:"st_1",name:b.boardName,stop:"",code:KhattiCore.parentCode(K.pphone()),status:"boarded"};
+  cloud.pushAttendance({...st,status:"boarded"},b.lineId||lineId,KhattiCore.today()).then(ok=>{if(!ok)K.toast("تعذّر مزامنة الصعود سحابيًا؛ تم الحفظ محليًا")}).catch(()=>K.toast("تعذّر مزامنة الصعود سحابيًا؛ تم الحفظ محليًا"));
+}
 K.toast("✅ تسجيل صعود تجريبي محلي — "+b.boardName);setTimeout(render,800)};
 $("#scan").onclick=()=>K.toast("📷 مسح QR متاح في النسخة الحقيقية — استخدم رمز PIN في النسخة التجريبية");
 }

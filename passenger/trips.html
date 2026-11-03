@@ -1,12 +1,20 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>اشتراكاتي ورحلاتي — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
   K.page("اشتراكاتي وبطاقة الصعود","search.html");
   const me=K.get("me",{name:"أحمد علي",phone:"07701112233"});
   const pCode=me.parentCode||KhattiCore.parentCode(me.phone);
+  const cloud=window.KhattiCloud;
+  const isCloud=()=>Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
+  function syncAtt(student,lineId){
+    if(!isCloud()||typeof cloud.pushAttendance!=="function")return;
+    cloud.pushAttendance(student,lineId||"l1",KhattiCore.today()).then(ok=>{
+      if(!ok)K.toast("تعذّر مزامنة الحضور سحابيًا؛ تم الحفظ محليًا");
+    }).catch(()=>K.toast("تعذّر مزامنة الحضور سحابيًا؛ تم الحفظ محليًا"));
+  }
 
   function render(){
     const trips=K.get("trips",[]).filter(t=>K.tripLine(t));
@@ -26,11 +34,12 @@
 
       <div class="card">
         <h3>📅 حالة دوامي اليوم (${KhattiCore.today()})</h3>
-        <p class="mut">الحالة التجريبية على هذا الجهاز: <b>${isAbsent?"🔴 مسجل غائب اليوم (تسجيل محلي فقط)":"🟢 حاضر — حالة حضور افتراضية"}</b></p>
-        <div class="row" style="gap:8px;">
+        <p class="mut">الحالة التجريبية على هذا الجهاز: <b>${isAbsent?"🔴 مسجل غائب اليوم (تسجيل محلي فقط)":myAtt.status==="boarded"?"🟢 تم تأكيد الصعود في الحافلة":"🟢 حاضر — حالة حضور افتراضية"}</b></p>
+        <div class="row" style="gap:8px;flex-wrap:wrap;">
           <button class="btn ${isAbsent?'btn-p':'btn-a'}" id="toggle-att">
             ${isAbsent?"↩️ إلغاء الغياب (أنا داوم اليوم)":"✋ أنا غائب اليوم (تغيير محلي فقط)"}
           </button>
+          ${isCloud()&&!isAbsent?`<button class="btn btn-p" id="confirm-board">✅ تأكيد الصعود</button>`:""}
           <a class="btn btn-g" href="tracking.html?id=l1">📍 تتبع الحافلة</a>
         </div>
       </div>
@@ -40,9 +49,20 @@
     `;
 
     $("#toggle-att").onclick=function(){
-      K.setStudentStatus("l1","st_1",isAbsent?"waiting":"absent");
+      const list=K.setStudentStatus("l1","st_1",isAbsent?"waiting":"absent");
+      const st=(Array.isArray(list)&&list.find(s=>s.id==="st_1"))||K.attendance("l1")[0];
+      syncAtt(st,"l1");
       render();
     };
+    const cb=$("#confirm-board");
+    if(cb){
+      cb.onclick=function(){
+        const list=K.setStudentStatus("l1","st_1","boarded");
+        const st=(Array.isArray(list)&&list.find(s=>s.id==="st_1"))||K.attendance("l1")[0];
+        syncAtt(st,"l1");
+        render();
+      };
+    }
 
     $("#trips-list").innerHTML=trips.length===0
       ? '<div class="mut">لا توجد رحلات مسجلة بعد.</div>'

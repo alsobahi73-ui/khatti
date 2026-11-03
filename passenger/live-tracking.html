@@ -12,7 +12,7 @@
 </head>
 <body><div class="wrap"><main id="app"></main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   const esc=value=>String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -214,13 +214,47 @@
       if(!gpsActive){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
     }catch(error){stopGPS();$("#gps-status").textContent="تعذّر تشغيل GPS في هذا المتصفح.";}
   };
-  window.addEventListener('pagehide',()=>{clearInterval(movementTimer);stopGPS();if(mapObj)mapObj.remove();},{once:true});
+  let pullTimer=null;
+  const cloud=window.KhattiCloud;
+  const isCloud=()=>Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
+  function showInactiveTrip(){
+    if(pullTimer){clearInterval(pullTimer);pullTimer=null;}
+    if(!document.getElementById("trip-inactive-msg")){
+      const card=document.querySelector("#app .card")||document.getElementById("app");
+      if(card)card.insertAdjacentHTML("afterbegin",'<div id="trip-inactive-msg" class="note" style="margin-bottom:8px;font-weight:800;">لا توجد رحلة نشطة حاليًا</div>');
+    }
+    const eb=$("#eta-badge");if(eb)eb.textContent="لا توجد رحلة نشطة حاليًا";
+    const gs=$("#gps-status");if(gs)gs.textContent="لا توجد رحلة نشطة حاليًا";
+  }
+  async function pollCloudLocations(){
+    if(!KhattiCore.inTripWindow(l.go||"07:00",l.back||"14:30")){showInactiveTrip();return;}
+    const rows=await cloud.pullLocations(l.id);
+    if(Array.isArray(rows)&&rows.length>0){
+      const drv=rows.find(r=>r&&(r.user_role==="driver"||r.role==="driver"))||rows[0];
+      const pt=drv?[Number(drv.lat),Number(drv.lng)]:null;
+      if(pt&&validPoint(pt)){
+        driverPos=pt;
+        if(Number.isFinite(Number(drv.speed))&&Number(drv.speed)>=0)driverSpeed=Math.round(Number(drv.speed));
+        updateHUD();
+      }
+    }
+  }
+  window.addEventListener('pagehide',()=>{clearInterval(movementTimer);if(pullTimer){clearInterval(pullTimer);pullTimer=null;}stopGPS();if(mapObj)mapObj.remove();},{once:true});
 
   $("#sos").onclick=function(){
     K.toast("وضع الطوارئ محاكى محلياً ولم يتم إرسال بلاغ خارجي");
   };
 
   updateHUD();
+  if(isCloud()){
+    clearInterval(movementTimer);autoMove=false;
+    if(!KhattiCore.inTripWindow(l.go||"07:00",l.back||"14:30")){
+      showInactiveTrip();
+    }else{
+      pollCloudLocations();
+      pullTimer=setInterval(pollCloudLocations,15000);
+    }
+  }
 })();
 </script>
 </body></html>

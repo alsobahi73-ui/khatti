@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>تقييم الرحلة — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
@@ -15,13 +15,66 @@
       <div class="field"><label for="rtxt">تعليقك</label><textarea id="rtxt" rows="3" maxlength="2000"></textarea></div>
       <button class="btn btn-p" id="rok">حفظ تقييم تجريبي</button>
     </div>
+    <div class="card">
+      <h3>🔒 تقييم الطرف الآخر (السائق)</h3>
+      <div id="other-rating-box"></div>
+    </div>
   `;
+  let cloudDrvEntry=null,cloudPulled=false;
+  function renderOther(){
+    const trips=K.get("trips",[]);
+    const cur=trips.find(t=>t.id===id)||trip;
+    const ratings=K.get("ratings",[]);
+    const pxRatings=K.get("pxRatings",{});
+    const localDrvEntry=(KhattiCore.record(pxRatings)&&pxRatings[id])||cur.driverRating||null;
+    const drvEntry=localDrvEntry||cloudDrvEntry;
+    const myRated=Boolean(cur.rated||ratings.some(r=>r&&r.tripId===id));
+    const otherRated=Boolean(cur.driverRated||cur.otherRated||drvEntry);
+    const tripDate=cur.serviceDate||cur.date||cur.tripDate||"";
+    const box=$("#other-rating-box");
+    if(!box)return;
+    const cloud=window.KhattiCloud;
+    if(!cloudPulled&&cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured()&&typeof cloud.pullRatings==="function"){
+      cloudPulled=true;
+      cloud.pullRatings(id).then(list=>{
+        if(!Array.isArray(list))return;
+        const drv=list.find(r=>r&&(r.role==="driver"||r.rater_role==="driver"));
+        if(drv){
+          cloudDrvEntry={stars:Number(drv.stars),comment:String(drv.comment??"")};
+          renderOther();
+        }
+      }).catch(()=>{});
+    }
+    if(!KhattiCore.canRevealRating(myRated,otherRated,tripDate)){
+      box.innerHTML=`<div class="mut">بانتظار تقييم الطرف الآخر</div>`;
+      return;
+    }
+    const starsVal=KhattiCore.record(drvEntry)?Number(drvEntry.stars??drvEntry.s):Number(drvEntry);
+    const commentTxt=KhattiCore.record(drvEntry)?String(drvEntry.comment??drvEntry.t??"").trim():"";
+    if(!drvEntry||!Number.isFinite(starsVal)||starsVal<1||starsVal>5){
+      box.innerHTML=`<div class="mut">لا توجد بيانات تقييم مسجّلة من الطرف الآخر.</div>`;
+      return;
+    }
+    box.innerHTML=`<div><strong>تقييم السائق:</strong> <span style="color:#f59e0b;">${"★".repeat(Math.round(starsVal))}</span> (${starsVal}/5)</div>${commentTxt?`<p style="margin:4px 0;">"${K.esc(commentTxt)}"</p>`:""}`;
+  }
+  renderOther();
   $("#rok").onclick=function(){
     const trips=K.get("trips",[]),current=trips.find(t=>t.id===id);
     if(!KhattiCore.canRate(current)){K.toast("التقييم متاح مرة واحدة بعد اكتمال الرحلة التجريبية");return}
-    const ratings=K.get("ratings",[]);ratings.push({tripId:id,stars:Number($("#rstar").value),comment:$("#rtxt").value.trim(),demo:true});
+    const stars=Number($("#rstar").value);
+    const comment=$("#rtxt").value.trim();
+    const ratings=K.get("ratings",[]);ratings.push({tripId:id,stars,comment,demo:true});
     try{K.commit({ratings,trips:trips.map(t=>t.id===id?{...t,rated:true}:t)})}catch(e){K.toast("لم تكتمل العملية؛ تعذّر حفظ التقييم");return}
     $("#rok").disabled=true;K.toast("حُفظ التقييم محليًا للتجربة؛ لم يُرسل");
+    const cloud=window.KhattiCloud;
+    if(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured()&&typeof cloud.pushRating==="function"){
+      cloud.pushRating({tripId:id,lineId:current.lineId||trip.lineId||"",role:"passenger",stars,comment}).then(ok=>{
+        if(!ok)K.toast("تعذّر مزامنة التقييم سحابيًا؛ تم الحفظ محليًا");
+      }).catch(()=>{
+        K.toast("تعذّر مزامنة التقييم سحابيًا؛ تم الحفظ محليًا");
+      });
+    }
+    renderOther();
   };
 })();
 </script></body></html>

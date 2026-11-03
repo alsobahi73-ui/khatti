@@ -61,8 +61,16 @@ create table if not exists public.khatti_bookings (
   pickup text default '',
   return_shift text default '14:30',
   status text default 'upcoming',
+  pay_method text default 'cash',
+  pay_status text default 'pending',
+  pay_ref text default '',
   created_at timestamptz default now()
 );
+
+-- ترقية المشاريع المنشأة من مخطط أقدم عبر إضافة أعمدة الدفع إن لم تكن موجودة
+alter table public.khatti_bookings add column if not exists pay_method text default 'cash';
+alter table public.khatti_bookings add column if not exists pay_status text default 'pending';
+alter table public.khatti_bookings add column if not exists pay_ref text default '';
 
 -- 5. جدول الإشعارات والتنبيهات الفورية (Broadcasts & Alerts)
 create table if not exists public.khatti_broadcasts (
@@ -73,18 +81,31 @@ create table if not exists public.khatti_broadcasts (
   created_at timestamptz default now()
 );
 
+-- 6. جدول تقييمات الرحلات المتبادلة (Ratings)
+create table if not exists public.khatti_ratings (
+  id text primary key,
+  trip_id text not null,
+  line_id text default '',
+  rater_role text not null check (rater_role in ('passenger', 'driver')),
+  stars integer not null,
+  comment text default '',
+  created_at timestamptz default now()
+);
+
 -- تفعيل صلاحيات القراءة والكتابة للنسخة الأولية (Row Level Security)
 alter table public.khatti_lines enable row level security;
 alter table public.khatti_live_locations enable row level security;
 alter table public.khatti_attendance enable row level security;
 alter table public.khatti_bookings enable row level security;
 alter table public.khatti_broadcasts enable row level security;
+alter table public.khatti_ratings enable row level security;
 
 create policy "Allow public read/write on khatti_lines" on public.khatti_lines for all using (true) with check (true);
 create policy "Allow public read/write on khatti_live_locations" on public.khatti_live_locations for all using (true) with check (true);
 create policy "Allow public read/write on khatti_attendance" on public.khatti_attendance for all using (true) with check (true);
 create policy "Allow public read/write on khatti_bookings" on public.khatti_bookings for all using (true) with check (true);
 create policy "Allow public read/write on khatti_broadcasts" on public.khatti_broadcasts for all using (true) with check (true);
+create policy "Allow public read/write on khatti_ratings" on public.khatti_ratings for all using (true) with check (true);
 
 -- تفعيل البث اللحظي المباشر عبر WebSockets (Supabase Realtime)
 alter publication supabase_realtime add table public.khatti_live_locations;

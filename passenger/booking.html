@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>حجز مقعد — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
@@ -22,7 +22,7 @@
   const dayPrice=l.day||Math.round(l.price/26);
 
   $("#app").innerHTML=`
-    <div class="note">محاكاة محلية فقط؛ لا يُرسل الحجز إلى سائق ولا يتم دفع أو تحقق أمني فعلي.</div>
+    <div class="note">تسجيل الحجز وطريقة الدفع يتم بتأكيد يدوي من السائق فقط — لا توجد بوابة دفع آليّة، ولا تحقق أمني فعلي.</div>
     <div class="card">
       <div class="route" style="font-size:17px;font-weight:800;">${K.esc(l.from)} ← ${K.esc(l.to)}</div>
       <div class="mut">السائق: ${K.esc(l.driver||l.driverName||"")} • السعر الأساسي: ${K.fmt(l.price)}/شهر</div>
@@ -50,6 +50,18 @@
 
       <div class="field"><label for="ph">رقم الهاتف للتأكيد</label><input id="ph" type="tel" value="${K.esc((K.get('me',{})||{}).phone||'')}"></div>
       <div class="field"><label for="unit_count">عدد المقاعد</label><select id="unit_count"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+
+      <div class="field"><label for="pay-method">طريقة الدفع</label>
+        <select id="pay-method">
+          <option value="cash">كاش عند السائق</option>
+          <option value="zaincash">زين كاش مسبق</option>
+          <option value="asiahawala">آسيا حوالة مسبق</option>
+        </select>
+      </div>
+      <div id="prepaid-box" style="display:none;">
+        <div class="field"><label for="pay-ref">رقم مرجع التحويل (اختياري)</label><input id="pay-ref" type="text" maxlength="100" placeholder="رقم العملية إن وجد"></div>
+        <div class="mut" id="pay-note" style="font-size:13px;margin-bottom:8px;">التأكيد يتم يدوياً من السائق بعد التحويل (لا توجد بوابة دفع آليّة).</div>
+      </div>
 
       <div class="note" id="price-summary" style="margin:10px 0;font-weight:700;"></div>
       <button class="btn btn-p" id="ok" style="width:100%;">حفظ حجز وبطاقة صعود تجريبيين</button>
@@ -104,6 +116,11 @@
     updateSummary();
   });
 
+  $("#pay-method").onchange=function(){
+    const isPrepaid=this.value==="zaincash"||this.value==="asiahawala";
+    $("#prepaid-box").style.display=isPrepaid?"block":"none";
+  };
+
   $("#ok").onclick=function(){
     if(saved)return;
     const ph=$("#ph").value.trim();
@@ -117,9 +134,13 @@
     const newId="bk_"+Date.now();
     const pin=String(Math.floor(1000+Math.random()*9000)); /* §3.14.1 — رمز صعود */
     const when=`${l.go||"07:00"} — عودة ${$("#return-shift").value} (${selectedPlan.label})`;
+    const payMethod=$("#pay-method")?$("#pay-method").value:"cash";
+    const isPrepaid=payMethod==="zaincash"||payMethod==="asiahawala";
+    const payRef=isPrepaid&&$("#pay-ref")?$("#pay-ref").value.trim():"";
     const entry={
       id:newId,
       lineId:l.id,
+      passengerName:K.pname(),
       serviceDate,
       when,
       status:"upcoming",
@@ -128,11 +149,21 @@
       plan:selectedPlan.label,
       pickup:$("#pickup").value,
       returnShift:$("#return-shift").value,
-      phone:ph
+      phone:ph,
+      payment:{
+        method:payMethod,
+        status:"pending",
+        ref:payRef
+      }
     };
     try{K.commit({bookings:[entry,...bookings],trips:[entry,...trips]})}catch(e){K.toast("تعذّر حفظ الحجز؛ لم يتم تأكيده. تحقق من التخزين.");return}
     saved=true;$("#ok").disabled=true;
     K.toast("حُفظ حجز محلي تجريبي؛ لا حجز فعلي. رمز تجريبي: "+pin.split("").join(" "));
+    const cloud=window.KhattiCloud;
+    const cloudReady=Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
+    if(cloud&&typeof cloud.pushBooking==="function"){
+      cloud.pushBooking(entry).then(ok=>{if(cloudReady&&!ok)K.toast("تعذّر مزامنة الحجز سحابيًا؛ تم الحفظ محليًا")}).catch(()=>{if(cloudReady)K.toast("تعذّر مزامنة الحجز سحابيًا؛ تم الحفظ محليًا")});
+    }
     setTimeout(()=>location.href="trips.html",1600);
   };
 
