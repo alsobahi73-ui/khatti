@@ -167,6 +167,102 @@
         if(r.note)map[key].notes.push(r.note);
       }
       return Object.values(map).sort((a,b)=>b.totalSeats-a.totalSeats);
+    },
+    chatChannelKey(lineId,tripDate){
+      const cleanLine=String(lineId??"").trim();
+      const cleanDate=String(tripDate===undefined?this.today():tripDate??"").trim();
+      if(!cleanLine||!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate))return "";
+      return `${cleanLine}:${cleanDate}`;
+    },
+    canChatInWindow(lineOrGo,backOrNow,nowArg){
+      if(this.record(lineOrGo)){
+        const go=lineOrGo.go||lineOrGo.go_time||"07:00";
+        const back=lineOrGo.back||lineOrGo.back_time||"14:30";
+        return this.inTripWindow(go,back,backOrNow===undefined?new Date():backOrNow);
+      }
+      return this.inTripWindow(lineOrGo,backOrNow,nowArg===undefined?new Date():nowArg);
+    },
+    filterLines(lines,filters={}){
+      const list=Array.isArray(lines)?lines:[];
+      const f=this.record(filters)?filters:{};
+      const area=String(f.area??f.from??"").trim();
+      const uni=String(f.to??f.uni??"").trim();
+      const comp=String(f.comp??"").trim();
+      const rawMaxPrice=f.maxPrice!==undefined&&f.maxPrice!==null?String(f.maxPrice).trim():"";
+      const hasMaxPrice=rawMaxPrice!==""&&Number.isFinite(Number(rawMaxPrice))&&Number(rawMaxPrice)>=0;
+      const maxPrice=hasMaxPrice?Number(rawMaxPrice):Infinity;
+      const rawMinRating=f.minRating!==undefined&&f.minRating!==null?String(f.minRating).trim():"";
+      const hasMinRating=rawMinRating!==""&&Number.isFinite(Number(rawMinRating))&&Number(rawMinRating)>0;
+      const minRating=hasMinRating?Number(rawMinRating):0;
+
+      return list.filter(l=>{
+        if(!this.record(l))return false;
+        if(area&&String(l.from??l.from_area??"")!==area)return false;
+        if(uni&&String(l.to??l.to_dest??"")!==uni)return false;
+        if(comp&&String(l.comp??"")!==comp)return false;
+        if(hasMaxPrice&&Number(l.price)>maxPrice)return false;
+        if(hasMinRating&&Number(l.rating)<minRating)return false;
+        return true;
+      });
+    },
+    /* التنبيه داخل التطبيق فقط في هذه الشريحة؛ لا رسائل SMS أو واتساب لأنها تحتاج مزودًا خارجيًا */
+    shouldShowAvailabilityBanner(line,notifyRequests,userId){
+      if(!this.record(line))return false;
+      const lineId=String(line.id??"").trim();
+      const free=Number(line.free);
+      if(!lineId||!Number.isFinite(free)||free<=0)return false;
+      const reqs=Array.isArray(notifyRequests)?notifyRequests:[];
+      const cleanUid=String(userId??"").trim();
+      return reqs.some(r=>{
+        if(typeof r==="string")return r.trim()===lineId;
+        if(!this.record(r))return false;
+        const rLineId=String(r.line_id??r.lineId??"").trim();
+        if(rLineId!==lineId)return false;
+        const rUid=String(r.user_id??r.userId??"").trim();
+        if(cleanUid&&rUid&&rUid!==cleanUid)return false;
+        return true;
+      });
+    },
+    getAvailabilityBanners(lines,notifyRequests,userId){
+      const list=Array.isArray(lines)?lines:[];
+      return list
+        .filter(l=>this.shouldShowAvailabilityBanner(l,notifyRequests,userId))
+        .map(l=>{
+          const from=String(l.from??l.from_area??"").trim();
+          const to=String(l.to??l.to_dest??"").trim();
+          const free=Number(l.free);
+          return {
+            lineId:String(l.id??"").trim(),
+            from,
+            to,
+            free,
+            msg:`أصبحت مقاعد متاحة على خط ${from} ← ${to}`
+          };
+        });
+    },
+    countLineNotifyRequests(lines,notifyRequests){
+      const list=Array.isArray(lines)?lines:[];
+      const reqs=Array.isArray(notifyRequests)?notifyRequests:[];
+      return list.filter(l=>this.record(l)&&String(l.id??"").trim()!=="").map(l=>{
+        const lineId=String(l.id).trim();
+        const count=reqs.filter(r=>{
+          if(typeof r==="string")return r.trim()===lineId;
+          if(!this.record(r))return false;
+          return String(r.line_id??r.lineId??"").trim()===lineId;
+        }).length;
+        return {
+          lineId,
+          from:String(l.from??l.from_area??""),
+          to:String(l.to??l.to_dest??""),
+          count
+        };
+      });
+    },
+    buildLineUpdateBroadcastMsg(line){
+      if(!this.record(line))return "تم تعديل خط";
+      const from=String(line.from??line.from_area??"").trim();
+      const to=String(line.to??line.to_dest??"").trim();
+      return (from&&to)?`تم تعديل خط ${from} ← ${to}`:"تم تعديل خط";
     }
   };
   if(typeof module!=="undefined"&&module.exports)module.exports=Core;
