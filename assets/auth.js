@@ -94,25 +94,6 @@
     },
 
     /* اشتقاق اسم المستخدم من الجلسة (اسم بيانات المستخدم أو بادئة البريد الإلكتروني) */
-    getPassengerName(session = undefined, fallback = ""){
-      const active = session === undefined ? this.readStoredSession() : session;
-      if(!active || typeof active !== "object") return fallback;
-      const u = (active.user && typeof active.user === "object") ? active.user : active;
-      const meta = (u.user_metadata && typeof u.user_metadata === "object")
-        ? u.user_metadata
-        : ((active.user_metadata && typeof active.user_metadata === "object")
-          ? active.user_metadata
-          : ((u.data && typeof u.data === "object") ? u.data : {}));
-      const rawName = String(meta.name ?? meta.full_name ?? u.name ?? u.full_name ?? active.name ?? "").trim();
-      if(rawName) return rawName;
-      const email = String(u.email ?? active.email ?? "").trim();
-      if(email){
-        const atIdx = email.indexOf("@");
-        const prefix = (atIdx > 0 ? email.slice(0, atIdx) : email).trim();
-        if(prefix) return prefix;
-      }
-      return fallback;
-    },
 
     /* تطبيع استجابة GoTrue إلى صيغة الجلسة الموحدة */
     normalizeSession(raw, fallbackMeta = {}){
@@ -594,9 +575,6 @@
       }
     },
 
-    async recover(emailOrOpts, redirectTo){
-      return await this.recoverPassword(emailOrOpts, redirectTo);
-    },
 
     /* تحليل hash الاستعادة (#access_token=...&type=recovery) وتثبيت الجلسة من الرمزين */
     parseRecoveryHash(hashInput){
@@ -688,9 +666,6 @@
       }
     },
 
-    async updatePassword(passwordOrOpts, accessToken){
-      return await this.resetPassword(passwordOrOpts, accessToken);
-    }
   };
 
   if(typeof window !== "undefined"){

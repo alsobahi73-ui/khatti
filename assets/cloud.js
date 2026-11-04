@@ -1,6 +1,6 @@
 /* وحدة الربط السحابي المجاني لتطبيق خطّي (Khatti Cloud via Supabase REST)
  * ملاحظة معمارية: التتبع والمزامنة يعتمدان على الاستطلاع الدوري كل 15 ثانية فقط (HTTP Polling)؛
- * لا يوجد أي اشتراك Realtime حي عبر WebSockets، ويبقى الحقل channel مساوياً لـ null دائماً.
+ * لا يوجد أي اشتراك Realtime حي عبر WebSockets؛ التتبع استطلاع HTTP فقط.
  * تعود الوحدة تلقائياً إلى التخزين المحلي (LocalStorage) في حال عدم إدخال مفاتيح السحابة بعد.
  */
 (function(root){
@@ -19,9 +19,6 @@
   }
 
   const KhattiCloud = {
-    client: null,
-    channel: null, /* لا اشتراك Realtime حي؛ التتبع استطلاع كل 15 ثانية فقط (يبقى null) */
-    deferredInstallPrompt: null,
     LINE_SELECT_COLS,
 
     getConfig(){
@@ -149,50 +146,6 @@
       } catch(e){ return false; }
     },
 
-    /* حجز ذري للمقاعد سحابياً عبر دالة reserve_seat في Supabase */
-    async reserveSeats(lineId, seats){
-      const count = Number(seats);
-      if(!this.isConfigured() || !lineId || !Number.isInteger(count) || count <= 0) return false;
-      const cfg = this.getConfig();
-      try {
-        const res = await this._request(`${cfg.url}/rest/v1/rpc/reserve_seat`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ p_line_id: String(lineId), p_seats: count })
-        });
-        if(!res || !res.ok) return false;
-        if(typeof res.json === "function"){
-          const data = await res.json();
-          return Boolean(data);
-        }
-        return true;
-      } catch(e){ return false; }
-    },
-
-    /* H1: استرجاع هاتف الخط عبر دالة get_line_phone (للسائق المالك أو صاحب حجز فقط، دون إظهاره في الواجهات) */
-    async getLinePhone(lineId){
-      const cleanId = String(lineId ?? "").trim();
-      if(!this.isConfigured() || !cleanId) return null;
-      const cfg = this.getConfig();
-      try {
-        const res = await this._request(`${cfg.url}/rest/v1/rpc/get_line_phone`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ p_line_id: cleanId })
-        });
-        if(!res || !res.ok) return null;
-        if(typeof res.json === "function"){
-          const data = await res.json();
-          return (typeof data === "string" && data.trim()) ? data.trim() : null;
-        }
-        return null;
-      } catch(e){ return null; }
-    },
-
     /* H4: بناء حمولة الحجز الذري دون تمرير user_id من العميل (يؤخذ من auth.uid() خادميًا) */
     buildAtomicBookingPayload(booking){
       const b = (booking && typeof booking === "object") ? booking : {};
@@ -276,6 +229,42 @@
       } catch(e){ return null; }
     },
 
+    /* إصلاح أمني (أ-1): عرض الأهل عبر دالة خادمية بكود الطالب بدل قراءة جدول المواقع العام */
+    async getParentView(parentCode){
+      const code = String(parentCode ?? "").trim().toUpperCase();
+      if(!this.isConfigured() || !code) return null;
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/rpc/get_parent_view`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ p_parent_code: code })
+        });
+        if(!res || !res.ok) return null;
+        const rows = await res.json();
+        if(Array.isArray(rows) && rows.length > 0) return rows[0];
+        return null;
+      } catch(e){ return null; }
+    },
+
+    /* إصلاح أمني (أ-1): موقع سائق خط الطالب عبر دالة خادمية بكود الطالب */
+    async getParentDriverLocation(parentCode){
+      const code = String(parentCode ?? "").trim().toUpperCase();
+      if(!this.isConfigured() || !code) return null;
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/rpc/get_driver_location_for_parent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ p_parent_code: code })
+        });
+        if(!res || !res.ok) return null;
+        const rows = await res.json();
+        if(Array.isArray(rows) && rows.length > 0) return rows[0];
+        return null;
+      } catch(e){ return null; }
+    },
+
     /* جلب قائمة الخطوط من سحابة Supabase وتحويلها إلى شكل LINES (دون phone إلا لمالك الخط) */
     async fetchLines(){
       if(!this.isConfigured()) return null;
@@ -351,13 +340,16 @@
       const sess = this._getSession();
       const driverId = this._getSessionUserId();
       if(!sess || !sess.access_token || !driverId) return false;
+      /* إصلاح أمني (أ-2): إنشاء الخط للسائقين المعتمدين فقط؛ الموافقة من الإدارة عبر لوحة التحكم */
+      const profile = await this.getDriverProfile(driverId);
+      if(!profile || profile.status !== "approved") return false;
       const cfg = this.getConfig();
       const existingId = (!line._new && !line.isNew) ? String(line.id ?? "").trim() : "";
       const lineId = existingId || `l_${Date.now().toString(36)}`;
       const seatsNum = Number(line.seats);
       const seats = Number.isFinite(seatsNum) && seatsNum > 0 ? Math.trunc(seatsNum) : 14;
       const freeNum = Number(line.free);
-      const free = Number.isFinite(freeNum) && freeNum >= 0 ? Math.trunc(freeNum) : seats;
+      const free = Number.isFinite(freeNum) && freeNum >= 0 ? Math.min(Math.trunc(freeNum), seats) : seats;
       const priceNum = Number(line.price);
       const price = Number.isFinite(priceNum) && priceNum >= 0 ? Math.trunc(priceNum) : 60000;
       const pickups = Array.isArray(line.pickups)
@@ -405,23 +397,6 @@
       } catch(e){ return false; }
     },
 
-    /* حذف خط سحابي (يسمح به السائق المالك فقط حسب سياسة RLS) */
-    async deleteLine(lineId){
-      const cleanId = String(lineId ?? "").trim();
-      if(!this.isConfigured() || !cleanId) return false;
-      const sess = this._getSession();
-      const driverId = this._getSessionUserId();
-      if(!sess || !sess.access_token || !driverId) return false;
-      const cfg = this.getConfig();
-      try {
-        const res = await this._request(
-          `${cfg.url}/rest/v1/khatti_lines?id=eq.${encodeURIComponent(cleanId)}`,
-          { method: "DELETE" }
-        );
-        return Boolean(res && res.ok);
-      } catch(e){ return false; }
-    },
-
     /* قراءة صف ملف السائق الخاص بالمستخدم الحالي من جدول khatti_driver_profiles */
     async getDriverProfile(userId){
       if(!this.isConfigured()) return null;
@@ -441,27 +416,35 @@
       } catch(e){ return null; }
     },
 
-    /* حفظ/إرسال ملف السائق في khatti_driver_profiles بالحالة pending */
+    /* حفظ ملف السائق: إدراج أول بحالة pending؛ إعادة الحفظ دون مساس بالحالة (إصلاح ل-9: قفل الحالة كان يرفض إعادة حفظ المعتمد) */
     async saveDriverProfile(profile){
       if(!this.isConfigured() || !profile || typeof profile !== "object") return false;
       const uid = String(profile.user_id || profile.userId || this._getSessionUserId() || "").trim();
       if(!uid) return false;
       const cfg = this.getConfig();
-      const payload = {
+      const base = {
         user_id: uid,
         name: String(profile.name || "").trim(),
         phone: String(profile.phone || "").trim(),
-        licence_file: String(profile.licence_file ?? profile.lic ?? "").trim(),
-        status: "pending"
+        licence_file: String(profile.licence_file ?? profile.lic ?? "").trim()
       };
       try {
+        const existing = await this.getDriverProfile(uid);
+        if(existing){
+          const res = await this._request(`${cfg.url}/rest/v1/khatti_driver_profiles?user_id=eq.${encodeURIComponent(uid)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(base)
+          });
+          return Boolean(res && res.ok);
+        }
         const res = await this._request(`${cfg.url}/rest/v1/khatti_driver_profiles`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Prefer: "resolution=merge-duplicates"
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ ...base, status: "pending" })
         });
         return Boolean(res && res.ok);
       } catch(e){ return false; }
@@ -526,38 +509,33 @@
       } catch(e){ return false; }
     },
 
-    /* مزامنة الحجز والاشتراك سحابياً في جدول khatti_bookings */
+    /* مزامنة لوحة السائق سحابياً: تحديث صف حجز موجود فقط (PATCH) — لا إدراج جديد، حتى لا تتكرر الحجوزات أو تُنشأ دون خصم مقاعد (إصلاح أ-3) */
     async pushBooking(booking){
       if(!this.isConfigured() || !booking || typeof booking !== "object") return false;
+      const bookingId = String(booking.id ?? "").trim();
+      if(!bookingId) return false;
       const cfg = this.getConfig();
       const pay = booking.payment && typeof booking.payment === "object" ? booking.payment : {};
       const payload = {
-        id: String(booking.id ?? ""),
-        line_id: String(booking.line_id ?? booking.lineId ?? ""),
-        passenger_name: String(booking.passenger_name ?? booking.passengerName ?? booking.name ?? ""),
-        phone: String(booking.phone ?? ""),
-        plan_label: String(booking.plan_label ?? booking.planLabel ?? booking.plan ?? ""),
-        seats: Array.isArray(booking.seats) ? booking.seats : [],
-        pickup: String(booking.pickup ?? ""),
-        return_shift: String(booking.return_shift ?? booking.returnShift ?? "14:30"),
         status: String(booking.status ?? "upcoming"),
         pay_method: String(pay.method ?? booking.pay_method ?? "cash"),
         pay_status: String(pay.status ?? booking.pay_status ?? "pending"),
         pay_ref: String(pay.ref ?? booking.pay_ref ?? "")
       };
-      const userId = String(booking.user_id || booking.userId || this._getSessionUserId() || "").trim();
-      if(userId) payload.user_id = userId;
-
       try {
-        const res = await this._request(`${cfg.url}/rest/v1/khatti_bookings`, {
-          method: "POST",
+        const res = await this._request(`${cfg.url}/rest/v1/khatti_bookings?id=eq.${encodeURIComponent(bookingId)}`, {
+          method: "PATCH",
           headers: {
-            "Content-Type": "application/json",
-            Prefer: "resolution=merge-duplicates"
+            "Content-Type": "application/json"
           },
           body: JSON.stringify(payload)
         });
-        return Boolean(res && res.ok);
+        if(!res || !res.ok) return false;
+        if(typeof res.json === "function"){
+          const data = await res.json();
+          if(Array.isArray(data)) return data.length > 0;
+        }
+        return true;
       } catch(e){ return false; }
     },
 
@@ -614,25 +592,7 @@
       } catch(e){ return false; }
     },
 
-    /* جلب تقييمات رحلة معينة من جدول khatti_ratings */
-    async pullRatings(tripId){
-      const cleanTripId = String(tripId ?? "").trim();
-      if(!this.isConfigured() || !cleanTripId) return [];
-      const cfg = this.getConfig();
-      try {
-        const res = await this._request(`${cfg.url}/rest/v1/khatti_ratings?trip_id=eq.${encodeURIComponent(cleanTripId)}&select=*`);
-        if(!res || !res.ok) return [];
-        const rows = await res.json();
-        if(!Array.isArray(rows)) return [];
-        return rows.filter(r => r && typeof r === "object").map(r => ({
-          role: String(r.rater_role ?? r.role ?? ""),
-          stars: Number(r.stars),
-          comment: String(r.comment ?? "")
-        }));
-      } catch(e){ return []; }
-    },
-
-    /* 1. المحادثة السحابية الجماعية للرحلة: إرسال رسالة إلى جدول khatti_chat_messages (قناة = line_id + trip_date) */
+    /* 1. المحادثة السحابية الجماعية للرحلة: إرسال رسالة (قناة = line_id + trip_date) — الهوية والدور يُفرضان خادميًا عبر Trigger (إصلاح م-8) */
     async pushChatMessage(input, roleArg, nameArg, msgArg, tripDateArg){
       if(!this.isConfigured()) return false;
       let lineId = "", tripDate = "", senderRole = "", senderName = "", msg = "", customId = "";
@@ -989,13 +949,6 @@
       }
     }
   };
-
-  if(typeof window !== "undefined"){
-    window.addEventListener("beforeinstallprompt", e => {
-      e.preventDefault();
-      KhattiCloud.deferredInstallPrompt = e;
-    });
-  }
 
   if(typeof window !== "undefined") window.KhattiCloud = KhattiCloud;
   root.KhattiCloud = KhattiCloud;

@@ -302,15 +302,9 @@ test('L1 & H5: schedules silent refresh 60s before expiry, reschedules after ref
       user: { id: 'u10', email: 'noor.iq@khatti.iq', user_metadata: { name: 'نور الهدى', role: 'passenger' } }
     });
     assert.equal(saved.user.name, 'نور الهدى');
-    assert.equal(KhattiAuth.getPassengerName(saved), 'نور الهدى');
     assert.ok(KhattiAuth._refreshTimer !== null);
     assert.equal(KhattiAuth._refreshScheduledExp, futureExp1);
 
-    // Email prefix fallback when name metadata is absent
-    assert.equal(KhattiAuth.getPassengerName({
-      access_token: 'tok_2',
-      user: { id: 'u11', email: 'karar.ali@khatti.iq', role: 'passenger' }
-    }), 'karar.ali');
 
     // Refreshing session reschedules timer for the new expires_at
     const futureExp2 = Math.floor(Date.now() / 1000) + 1800;

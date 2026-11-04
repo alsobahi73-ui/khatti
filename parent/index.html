@@ -9,6 +9,7 @@
   const cloud=window.KhattiCloud;
   const isCloud=()=>Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
   let pullTimer=null;
+  let cloudChild=null; /* طالب مربوط من السحابة بكوده (لا يوجد في البيانات المحلية) */
   function stopPull(){if(pullTimer){clearInterval(pullTimer);pullTimer=null;}}
   window.addEventListener("pagehide",stopPull,{once:true});
 
@@ -18,6 +19,22 @@
       stopPull();
       $("#app").innerHTML='<div class="card" id="parent-inactive-card" style="text-align:center;padding:20px;"><b>لا توجد رحلة نشطة</b></div>';
       return;
+    }
+    /* إصلاح أمني (أ-1): موقع السائق عبر دالة خادمية بكود الطالب أولًا؛ قراءة جدول المواقع العام لم تعد متاحة لغير المشاركين */
+    const box0=document.getElementById("parent-driver-loc");
+    if(box0&&isCloud()){
+      const code=K.get("parent_linked_code",null);
+      if(code){
+        const rpc=await cloud.getParentDriverLocation(code);
+        if(rpc){
+          const lat=Number(rpc.lat),lng=Number(rpc.lng);
+          if(KhattiCore.point([lat,lng])){
+            const spd=Number.isFinite(Number(rpc.speed))&&Number(rpc.speed)>=0?Math.round(Number(rpc.speed)):0;
+            box0.textContent=`🚌 موقع السائق المباشر: [${lat.toFixed(4)}, ${lng.toFixed(4)}] • السرعة: ${spd} كم/س`;
+            return;
+          }
+        }
+      }
     }
     const rows=await cloud.pullLocations(lineId);
     const box=document.getElementById("parent-driver-loc");
@@ -45,7 +62,15 @@
     }
     const att=K.attendance(d.lineId||"l1");
     const savedCode=K.get("parent_linked_code",att[0]?att[0].code:"KH-2233");
-    const child=att.find(s=>s.code===savedCode);
+    const child=att.find(s=>s.code===savedCode)||(cloudChild&&cloudChild.code===savedCode?cloudChild:null);
+    const isCloudChild=Boolean(cloudChild&&cloudChild.code===savedCode);
+    const effLineId=isCloudChild&&cloudChild.lineId?cloudChild.lineId:lineId;
+    const lineObj=K.line(effLineId)||null;
+    const drvName=isCloudChild?(lineObj?lineObj.driverName:"سائق الخط"):d.name;
+    const drvVeh=isCloudChild?(lineObj?lineObj.vehicle:"—"):(l.vehicle||d.vehicle);
+    const drvPlate=isCloudChild?"—":(d.plate||"");
+    const drvRoute=isCloudChild?(lineObj?`${lineObj.from} ↔ ${lineObj.to}`:d.route):(l.from?`${l.from} ↔ ${l.to}`:d.route);
+    const drvBadge=isCloudChild?"":K.trusted(d);
     const broadcasts=K.get("broadcasts",[]);
     /* §3.14.1 — إشعار صعود عبر محاكاة PIN (لمرة واحدة) */
     const be=K.get("boardEv",null);
@@ -76,7 +101,7 @@
         }</b> ${child.updatedAt?`<span class="mut">(${K.esc(child.updatedAt)})</span>`:""}</p>
         ${isCloud()?`<div class="note" id="parent-driver-loc" style="margin-top:8px;">جارٍ جلب موقع السائق...</div>`:""}
         <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;">
-          <a class="btn btn-p" href="../passenger/tracking.html?id=${K.esc(d.lineId||'l1')}">📍 تتبع الحافلة على الخريطة</a>
+          <a class="btn btn-p" href="../passenger/tracking.html?id=${K.esc(effLineId)}">📍 تتبع الحافلة على الخريطة</a>
           <button class="btn btn-a" id="parent-skip-btn">
             ${child.status==="absent"?"↩️ إلغاء غياب اليوم":"✋ تسجيل غياب تجريبي محلي"}
           </button>
@@ -85,10 +110,10 @@
 
       <div class="card">
         <h3>🚘 بيانات السائق المعتمد</h3>
-        <p><strong>السائق:</strong> ${K.esc(d.name)} ${K.trusted(d)}</p>
+        <p><strong>السائق:</strong> ${K.esc(drvName)} ${drvBadge}</p>
         <p><strong>التواصل:</strong> عبر قنوات الرحلة والتنبيهات داخل التطبيق فقط (لا تُعرض أرقام الهواتف ولا يتم التواصل المباشر)</p>
-        <p><strong>المركبة:</strong> ${K.esc(l.vehicle||d.vehicle)} — ${K.esc(d.plate||"")}</p>
-        <p><strong>المسار:</strong> ${K.esc(l.from?`${l.from} ↔ ${l.to}`:d.route)}</p>
+        <p><strong>المركبة:</strong> ${K.esc(drvVeh)} — ${K.esc(drvPlate)}</p>
+        <p><strong>المسار:</strong> ${K.esc(drvRoute)}</p>
       </div>
 
       <div class="card">
@@ -101,26 +126,46 @@
       </div>
     `;
 
-    $("#link-btn").onclick=function(){
+    $("#link-btn").onclick=async function(){
       const v=$("#pcode-in").value.trim().toUpperCase();
-      if(!att.some(student=>student.code===v)){K.toast("الكود غير موجود؛ لم يتغير الطالب المتابع");return}
-      K.set("parent_linked_code",v);
-      K.toast("تم اختيار الطالب التجريبي محليًا: "+v);
-      render();
+      if(att.some(student=>student.code===v)){cloudChild=null;K.set("parent_linked_code",v);K.toast("تم اختيار الطالب التجريبي محليًا: "+v);render();return}
+      if(isCloud()){
+        const view=await cloud.getParentView(v);
+        if(view){
+          cloudChild={id:"cloud_"+v,name:String(view.student_name||"طالب"),code:String(view.student_code||v),stop:"",status:String(view.status||"waiting"),lineId:String(view.line_id||""),updatedAt:""};
+          K.set("parent_linked_code",v);
+          K.toast("تم ربط الطالب من السحابة ✓");
+          render();return;
+        }
+      }
+      K.toast("الكود غير موجود؛ لم يتغير الطالب المتابع");
     };
 
     $("#parent-skip-btn").onclick=function(){
-      K.setStudentStatus(d.lineId||"l1",child.id,child.status==="absent"?"waiting":"absent");
+      K.setStudentStatus(effLineId,child.id,child.status==="absent"?"waiting":"absent");
       render();
     };
 
     if(isCloud()){
-      pollParentLocation(lineId);
-      pullTimer=setInterval(()=>pollParentLocation(lineId),15000);
+      pollParentLocation(effLineId);
+      pullTimer=setInterval(()=>pollParentLocation(effLineId),15000);
     }
   }
 
-  render();
+  /* عند إعادة التحميل: استعادة الربط السحابي بالكود المحفوظ قبل أول رسم */
+  (async function initParent(){
+    if(isCloud()){
+      const code0=K.get("parent_linked_code",null);
+      const att0=K.attendance(d.lineId||"l1");
+      if(code0&&!att0.some(s=>s.code===code0)){
+        const view=await cloud.getParentView(code0);
+        if(view){
+          cloudChild={id:"cloud_"+code0,name:String(view.student_name||"طالب"),code:String(view.student_code||code0),stop:"",status:String(view.status||"waiting"),lineId:String(view.line_id||""),updatedAt:""};
+        }
+      }
+    }
+    render();
+  })();
 })();
 </script>
 </body></html>

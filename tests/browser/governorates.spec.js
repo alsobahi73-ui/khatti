@@ -6,5 +6,5 @@ test('published interface exposes all 19 governorates with dependent cities',asy
  await page.locator('#gov').selectOption('بغداد');await expect(page.locator('#area')).toContainText('الكاظمية');await expect(page.locator('.linecard')).toHaveCount(await page.evaluate(()=>LINES.length));
 });
 test('selected province and city are saved together in the availability request',async({page})=>{
- await page.locator('#gov').selectOption('ذي قار');await page.locator('#area').selectOption('الشطرة');await page.locator('#notifybtn').click();const request=await page.evaluate(()=>K.get('requests',[]).at(-1));expect(request.gov).toBe('ذي قار');expect(request.area).toBe('الشطرة');
+ await page.locator('#gov').selectOption('ذي قار');await page.locator('#area').selectOption('الشطرة');await page.locator('#notifybtn').click();const request=await page.evaluate(()=>K.get('holReqs',[]).at(-1));expect(request.gov).toBe('ذي قار');expect(request.area).toBe('الشطرة');
 });

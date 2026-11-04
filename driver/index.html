@@ -145,8 +145,8 @@
               </div>
               <span class="grow"></span>
               <div class="row" style="gap:4px;">
-                <button class="btn btn-p" onclick="updSt('${s.id}','boarded')" ${s.status==='absent'?'disabled':''}>صعد ✅</button>
-                <button class="btn btn-g" onclick="updSt('${s.id}','arrived')" ${s.status==='absent'?'disabled':''}>وصل 🎓</button>
+                <button class="btn btn-p" data-upd-st="${K.esc(s.id)}" data-upd-status="boarded" ${s.status==='absent'?'disabled':''}>صعد ✅</button>
+                <button class="btn btn-g" data-upd-st="${K.esc(s.id)}" data-upd-status="arrived" ${s.status==='absent'?'disabled':''}>وصل 🎓</button>
               </div>
             </div>
           </div>
@@ -252,6 +252,12 @@
     K.setStudentStatus(l.id,studentId,status);
     render();
   };
+
+  /* تصليب (ل-5): معرّفات الطلاب عبر data-* بدل سلاسل JS مضمّنة في onclick */
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-upd-st]");
+    if(b && window.updSt) window.updSt(b.dataset.updSt, b.dataset.updStatus);
+  });
 
   render();
 

@@ -110,7 +110,8 @@ $("#results").addEventListener("click",async e=>{
 $("#pinmode").onclick=()=>{const b=$("#pinbox");b.style.display=b.style.display==="none"?"block":"none";
  if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",selectedLocation().center,11);
   if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}};
-$("#notifybtn").onclick=()=>{const r=K.get("requests",[]);r.push({gov:$("#gov").value,area:area.value,uni:uni.value,comp:fc||"الكل",d:new Date().toLocaleDateString("ar")});K.set("requests",r);K.toast("حُفظ طلب تجريبي محليًا؛ لا تُرسل إشعارات فعلية")};
+/* إصلاح (م-12): طلب الخط الجديد يُكتب في holReqs بشكل متوافق مع قاعدة تحقق K.get (id/from/to/date/dlabel/seats) مع بقاء حقول gov/area/uni الأصلية — فيظهر للسائقين ضمن عناقيد الطلب */
+$("#notifybtn").onclick=()=>{const today=new Date().toISOString().slice(0,10);const dstr=new Date().toLocaleDateString("ar");const item={id:"rq_"+Date.now(),gov:$("#gov").value,area:area.value,uni:uni.value,comp:(fc==="girls"||fc==="boys"||fc==="mixed")?fc:"mixed",d:dstr,from:area.value,to:uni.value,date:today,dlabel:dstr,seats:1};const r=K.get("holReqs",[]);r.push(item);K.set("holReqs",r);K.toast("حُفظ طلب تجريبي محليًا؛ لا تُرسل إشعارات فعلية")};
 doSearch();
 window.addEventListener("pagehide",()=>{if(pmap)pmap.remove()},{once:true});
 })();

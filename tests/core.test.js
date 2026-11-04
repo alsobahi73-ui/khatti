@@ -78,7 +78,8 @@ test('completeLineTrips marks matching line upcoming bookings and trips as done 
 
 test('pure helpers: atomic booking payload, rating reveal from myRating + otherFlag, session name derivation, absence path selection, and student parent_code resolution',()=>{
  // 1. H4: buildAtomicBookingPayload builds RPC parameters and never accepts client user_id
- const payload = C.buildAtomicBookingPayload({
+ const Cloud = require('../assets/cloud');
+ const payload = Cloud.buildAtomicBookingPayload({
   id: 'ignored_client_id',
   user_id: 'spoofed_uid',
   userId: 'spoofed_uid_2',

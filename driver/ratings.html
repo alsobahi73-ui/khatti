@@ -66,7 +66,7 @@
         <div style="margin-top:8px;">
           <div class="field"><label for="dstar-${K.esc(t.id)}">تقييم الراكب (1-5)</label><select id="dstar-${K.esc(t.id)}"><option value="5">5 ★</option><option value="4">4 ★</option><option value="3">3 ★</option><option value="2">2 ★</option><option value="1">1 ★</option></select></div>
           <div class="field"><label for="dtxt-${K.esc(t.id)}">تعليق اختياري</label><textarea id="dtxt-${K.esc(t.id)}" rows="2" maxlength="2000" placeholder="اكتب تعليقك عن الراكب (اختياري)..."></textarea></div>
-          <button type="button" class="btn btn-p" id="drate-${K.esc(t.id)}" onclick="saveDriverRating('${K.esc(t.id)}')">حفظ تقييمي</button>
+          <button type="button" class="btn btn-p" id="drate-${K.esc(t.id)}" data-rate-trip="${K.esc(t.id)}">حفظ تقييمي</button>
         </div>`:"";
       if(!KhattiCore.resolveRatingReveal(myRated,otherRated)){
         return `<div class="card" style="margin-bottom:10px;"><div><strong>${K.esc(K.pname())}</strong> <span class="mut">(${K.esc(t.when||t.id)})</span></div><div class="mut" style="margin-top:4px;">بانتظار تقييم الطرف الآخر</div>${formHTML}</div>`;
@@ -80,6 +80,12 @@
     }).join("");
     $("#ratings-list").innerHTML=commentsHTML+tripsHTML;
   }
+
+  /* تصليب (ل-5): معرّف الرحلة عبر data-* بدل سلسلة JS مضمّنة في onclick */
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-rate-trip]");
+    if(b && window.saveDriverRating) window.saveDriverRating(b.dataset.rateTrip);
+  });
 
   window.saveDriverRating=function(tripId){
     const l=K.line(MYDRIVER.lineId);
