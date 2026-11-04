@@ -623,3 +623,140 @@ test('H1, H4, H5, M2, M3: getLinePhone, createBookingAtomic, K.pname session ide
     globalThis.fetch = origFetch;
   }
 });
+
+test('Slice 3 cloud methods: pushChatMessage/pullChatMessages, pushNotifyRequest/pullNotifyRequests, and pushBroadcast/pullBroadcasts', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    // 1. Unconfigured guards
+    assert.equal(await KhattiCloud.pushChatMessage({ line_id: 'l1', trip_date: '2026-11-04', sender_role: 'passenger', sender_name: 'أحمد', msg: 'مرحبا' }), false);
+    assert.deepEqual(await KhattiCloud.pullChatMessages('l1', '2026-11-04'), []);
+    assert.equal(await KhattiCloud.pushNotifyRequest('l1'), false);
+    assert.deepEqual(await KhattiCloud.pullNotifyRequests('l1'), []);
+    assert.equal(await KhattiCloud.pushBroadcast({ line_id: 'l1', msg: 'تم تعديل خط الكرادة ← الجادرية' }), false);
+    assert.deepEqual(await KhattiCloud.pullBroadcasts('l1'), []);
+
+    // Configure cloud + session
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+    localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+      access_token: 'user_jwt_777',
+      refresh_token: 'user_ref_777',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 'uid-participant-1', email: 'user@khatti.iq', role: 'passenger', name: 'علي حسن' }
+    }));
+
+    // 2. pushChatMessage & pullChatMessages
+    const chatReqs = [];
+    globalThis.fetch = async (url, opts) => {
+      chatReqs.push({ url, opts, body: opts && opts.body ? JSON.parse(opts.body) : null });
+      return {
+        ok: true,
+        json: async () => ([
+          {
+            id: 'cm_1',
+            line_id: 'l1',
+            trip_date: '2026-11-04',
+            sender_role: 'passenger',
+            sender_name: 'علي حسن',
+            sender_user_id: 'uid-participant-1',
+            msg: 'أنا عند نقطة التجمع',
+            created_at: '2026-11-04T04:15:00Z'
+          },
+          {
+            id: 'cm_2',
+            line_id: 'l1',
+            trip_date: '2026-11-04',
+            sender_role: 'driver',
+            sender_name: 'أبو محمد الحسني',
+            sender_user_id: 'uid-driver-1',
+            msg: 'خمس دقائق وأصل',
+            created_at: '2026-11-04T04:16:00Z'
+          }
+        ])
+      };
+    };
+
+    const pushedChat = await KhattiCloud.pushChatMessage({
+      line_id: 'l1',
+      trip_date: '2026-11-04',
+      sender_role: 'passenger',
+      sender_name: 'علي حسن',
+      msg: 'أنا عند نقطة التجمع'
+    });
+    assert.equal(pushedChat, true);
+    assert.equal(chatReqs[0].url, 'https://test-proj.supabase.co/rest/v1/khatti_chat_messages');
+    assert.equal(chatReqs[0].opts.method, 'POST');
+    assert.equal(chatReqs[0].body.line_id, 'l1');
+    assert.equal(chatReqs[0].body.trip_date, '2026-11-04');
+    assert.equal(chatReqs[0].body.sender_role, 'passenger');
+    assert.equal(chatReqs[0].body.sender_name, 'علي حسن');
+    assert.equal(chatReqs[0].body.sender_user_id, 'uid-participant-1');
+    assert.equal(chatReqs[0].body.msg, 'أنا عند نقطة التجمع');
+
+    const pulledChat = await KhattiCloud.pullChatMessages('l1', '2026-11-04');
+    assert.equal(chatReqs[1].url, 'https://test-proj.supabase.co/rest/v1/khatti_chat_messages?line_id=eq.l1&trip_date=eq.2026-11-04&order=created_at.asc&select=*');
+    assert.equal(pulledChat.length, 2);
+    assert.equal(pulledChat[0].me, true);
+    assert.equal(pulledChat[0].msg, 'أنا عند نقطة التجمع');
+    assert.equal(pulledChat[1].me, false);
+    assert.equal(pulledChat[1].sender_role, 'driver');
+
+    // 3. pushNotifyRequest & pullNotifyRequests
+    const notifyReqs = [];
+    globalThis.fetch = async (url, opts) => {
+      notifyReqs.push({ url, opts, body: opts && opts.body ? JSON.parse(opts.body) : null });
+      return {
+        ok: true,
+        json: async () => ([
+          { id: 'l1:uid-participant-1', line_id: 'l1', user_id: 'uid-participant-1', created_at: '2026-11-04T05:00:00Z' }
+        ])
+      };
+    };
+
+    const pushedNotify = await KhattiCloud.pushNotifyRequest('l1');
+    assert.equal(pushedNotify, true);
+    assert.equal(notifyReqs[0].url, 'https://test-proj.supabase.co/rest/v1/khatti_notify_requests');
+    assert.equal(notifyReqs[0].body.id, 'l1:uid-participant-1');
+    assert.equal(notifyReqs[0].body.line_id, 'l1');
+    assert.equal(notifyReqs[0].body.user_id, 'uid-participant-1');
+
+    const pulledNotify = await KhattiCloud.pullNotifyRequests('l1');
+    assert.equal(notifyReqs[1].url, 'https://test-proj.supabase.co/rest/v1/khatti_notify_requests?line_id=eq.l1&select=*');
+    assert.equal(pulledNotify.length, 1);
+    assert.equal(pulledNotify[0].line_id, 'l1');
+    assert.equal(pulledNotify[0].user_id, 'uid-participant-1');
+
+    // 4. pushBroadcast & pullBroadcasts
+    const bcastReqs = [];
+    globalThis.fetch = async (url, opts) => {
+      bcastReqs.push({ url, opts, body: opts && opts.body ? JSON.parse(opts.body) : null });
+      return {
+        ok: true,
+        json: async () => ([
+          { id: 'b_100', line_id: 'l1', msg: 'تم تعديل خط الكرادة ← جامعة بغداد (الجادرية)', time_label: '07:30 ص' }
+        ])
+      };
+    };
+
+    const pushedBcast = await KhattiCloud.pushBroadcast({
+      line_id: 'l1',
+      msg: 'تم تعديل خط الكرادة ← جامعة بغداد (الجادرية)',
+      time_label: '07:30 ص'
+    });
+    assert.equal(pushedBcast, true);
+    assert.equal(bcastReqs[0].url, 'https://test-proj.supabase.co/rest/v1/khatti_broadcasts');
+    assert.equal(bcastReqs[0].body.line_id, 'l1');
+    assert.equal(bcastReqs[0].body.msg, 'تم تعديل خط الكرادة ← جامعة بغداد (الجادرية)');
+    assert.equal(bcastReqs[0].body.time_label, '07:30 ص');
+
+    const pulledBcast = await KhattiCloud.pullBroadcasts('l1');
+    assert.equal(bcastReqs[1].url, 'https://test-proj.supabase.co/rest/v1/khatti_broadcasts?line_id=eq.l1&order=created_at.desc&select=*');
+    assert.equal(pulledBcast.length, 1);
+    assert.equal(pulledBcast[0].msg, 'تم تعديل خط الكرادة ← جامعة بغداد (الجادرية)');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
