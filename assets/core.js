@@ -40,22 +40,6 @@
     resolveRatingReveal(myRated,hasOtherRatingFlag){
       return this.canRevealRating(myRated,Boolean(hasOtherRatingFlag));
     },
-    buildAtomicBookingPayload(booking){
-      const b=this.record(booking)?booking:{};
-      const pay=this.record(b.payment)?b.payment:{};
-      return {
-        p_line_id:String(b.line_id??b.lineId??"").trim(),
-        p_passenger_name:String(b.passenger_name??b.passengerName??b.name??"").trim(),
-        p_phone:String(b.phone??"").trim(),
-        p_plan_label:String(b.plan_label??b.planLabel??b.plan??"").trim(),
-        p_seats:Array.isArray(b.seats)?b.seats:[],
-        p_pickup:String(b.pickup??"").trim(),
-        p_return_shift:String(b.return_shift??b.returnShift??"14:30").trim()||"14:30",
-        p_pay_method:String(pay.method??b.pay_method??"cash").trim()||"cash",
-        p_pay_status:String(pay.status??b.pay_status??"pending").trim()||"pending",
-        p_pay_ref:String(pay.ref??b.pay_ref??"").trim()
-      };
-    },
     passengerNameFromSession(session,fallback=""){
       if(!this.record(session))return fallback;
       const u=this.record(session.user)?session.user:session;
@@ -128,27 +112,6 @@
         return {...item};
       });
       return {bookings:nextBookings,trips:nextTrips,completedBookings};
-    },
-    getDeviceId(){
-      const key="khatti_demo_v1_device_id";
-      try{
-        if(typeof localStorage!=="undefined"){
-          const existing=String(localStorage.getItem(key)||"").trim().replace(/^"|"$/g,"").toLowerCase();
-          if(/^[0-9a-f]{16}$/.test(existing))return existing;
-        }
-      }catch(e){}
-      let id="";
-      if(typeof crypto!=="undefined"&&crypto&&typeof crypto.getRandomValues==="function"){
-        const bytes=new Uint8Array(8);
-        crypto.getRandomValues(bytes);
-        id=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
-      }else{
-        id=Array.from({length:16},()=>Math.floor(Math.random()*16).toString(16)).join("");
-      }
-      try{
-        if(typeof localStorage!=="undefined")localStorage.setItem(key,id);
-      }catch(e){}
-      return id;
     },
     parentCode(phone){const clean=String(phone??"").replace(/\D/g,"");return "KH-"+(clean.slice(-4)||"4829")},
     clusterRequests(reqs){
