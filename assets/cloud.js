@@ -282,6 +282,81 @@
       } catch(e){ return null; }
     },
 
+    /* إنشاء أو تعديل خط سحابي مع فرض driver_id من الجلسة الحالية دائمًا */
+    async pushLine(line){
+      if(!this.isConfigured() || !line || typeof line !== "object") return false;
+      const sess = this._getSession();
+      const driverId = this._getSessionUserId();
+      if(!sess || !sess.access_token || !driverId) return false;
+      const cfg = this.getConfig();
+      const existingId = (!line._new && !line.isNew) ? String(line.id ?? "").trim() : "";
+      const lineId = existingId || `l_${Date.now().toString(36)}`;
+      const seatsNum = Number(line.seats);
+      const seats = Number.isFinite(seatsNum) && seatsNum > 0 ? Math.trunc(seatsNum) : 14;
+      const freeNum = Number(line.free);
+      const free = Number.isFinite(freeNum) && freeNum >= 0 ? Math.trunc(freeNum) : seats;
+      const priceNum = Number(line.price);
+      const price = Number.isFinite(priceNum) && priceNum >= 0 ? Math.trunc(priceNum) : 60000;
+      const pickups = Array.isArray(line.pickups)
+        ? line.pickups.map(p => String(p).trim()).filter(Boolean)
+        : (typeof line.pickups === "string"
+          ? line.pickups.split(/[،,]/).map(s => s.trim()).filter(Boolean)
+          : []);
+
+      const payload = {
+        id: lineId,
+        driver_id: driverId,
+        from_area: String(line.from_area ?? line.from ?? "").trim(),
+        to_dest: String(line.to_dest ?? line.to ?? "").trim(),
+        driver_name: String(line.driver_name ?? line.driverName ?? line.driver ?? sess.user?.email ?? "سائق").trim() || "سائق",
+        phone: String(line.phone ?? "").trim(),
+        vehicle: String(line.vehicle ?? line.type ?? "").trim(),
+        plate: String(line.plate ?? "").trim(),
+        comp: String(line.comp || "mixed").trim() || "mixed",
+        price,
+        seats,
+        free,
+        go_time: String(line.go_time ?? line.go ?? "07:00").trim() || "07:00",
+        back_time: String(line.back_time ?? line.back ?? "14:30").trim() || "14:30",
+        pickups,
+        updated_at: new Date().toISOString()
+      };
+
+      const isUpdate = Boolean(existingId);
+      const url = isUpdate
+        ? `${cfg.url}/rest/v1/khatti_lines?id=eq.${encodeURIComponent(existingId)}`
+        : `${cfg.url}/rest/v1/khatti_lines`;
+      const method = isUpdate ? "PATCH" : "POST";
+
+      try {
+        const res = await this._request(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        return Boolean(res && res.ok);
+      } catch(e){ return false; }
+    },
+
+    /* حذف خط سحابي (يسمح به السائق المالك فقط حسب سياسة RLS) */
+    async deleteLine(lineId){
+      const cleanId = String(lineId ?? "").trim();
+      if(!this.isConfigured() || !cleanId) return false;
+      const sess = this._getSession();
+      const driverId = this._getSessionUserId();
+      if(!sess || !sess.access_token || !driverId) return false;
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(
+          `${cfg.url}/rest/v1/khatti_lines?id=eq.${encodeURIComponent(cleanId)}`,
+          { method: "DELETE" }
+        );
+        return Boolean(res && res.ok);
+      } catch(e){ return false; }
+    },
+
     /* قراءة صف ملف السائق الخاص بالمستخدم الحالي من جدول khatti_driver_profiles */
     async getDriverProfile(userId){
       if(!this.isConfigured()) return null;
