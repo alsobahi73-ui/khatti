@@ -267,33 +267,6 @@ const K={
       return m;
     }catch(e){fb();return null}
   },
-  sim(m,route,onEv){
-    if(!m||!Array.isArray(route)||route.length<2)return ()=>{};
-    const pts=[];
-    for(let i=1;i<route.length;i++){
-      const a=route[i-1],b=route[i];
-      for(let k=1;k<=14;k++)pts.push([a[0]+(b[0]-a[0])*k/14,a[1]+(b[1]-a[1])*k/14]);
-    }
-    try{
-      L.polyline(route,{color:"#123a5c",weight:4}).addTo(m);
-      L.marker(route[0]).addTo(m).bindPopup("الانطلاق");
-      L.marker(route[route.length-1]).addTo(m).bindPopup("الوصول");
-      const bus=L.marker(pts[0],{icon:L.divIcon({className:"mapbus",html:"🚌",iconSize:[30,30],iconAnchor:[15,15]})}).addTo(m);
-      let i=0,alerted=false;
-      const iv=setInterval(()=>{
-        i++;
-        if(i>=pts.length){clearInterval(iv);onEv&&onEv("done",0);return}
-        bus.setLatLng(pts[i]);
-        const rem=1-i/pts.length;
-        if(!alerted&&rem<=0.35){
-          alerted=true;
-          this.toast("🔔 محاكاة تنبيه اقتراب؛ لا يوجد تتبع لحافلة حقيقية");
-        }
-        onEv&&onEv("tick",rem);
-      },900);
-      return ()=>clearInterval(iv);
-    }catch(e){return ()=>{}}
-  },
   dist:(a,b)=>KhattiCore.dist(a,b),
   esc:s=>KhattiCore.esc(s),
   /* §3.14.1+8 — رمز صعود QR/PIN */
@@ -329,7 +302,6 @@ Object.assign(K,{
     const driver=h.driver||h.driverName||"";
     return `<div class="card"><div class="row">${this.badge(h.comp)}${this.trusted(h)}<span class="grow"></span><b>${this.fmt(h.price)}</b></div><div class="route" style="font-weight:800;margin:6px 0">${this.esc(h.from)} ← ${this.esc(h.to)}</div><div class="mut">📅 ${this.esc(dlabel)} — 🕒 ${this.esc(h.time)} • ${this.esc(driver)} ${h.rc?this.stars(h.rating):""}</div>${h.note?`<div class="mut" style="margin-top:4px">📝 ${this.esc(h.note)}</div>`:""}<div class="row" style="margin-top:8px"><span>💺 <b>${free}</b> مقاعد متبقية</span><span class="grow"></span>${free>0?`<button class="btn btn-a" onclick="${bookFn}('${encodeURIComponent(h.id)}')">حجز الآن ✓</button>`:`<button class="btn" disabled>مكتمل</button>`}</div></div>`;
   },
-  holMatch(an,rq){return an.from===rq.from&&an.to===rq.to&&an.date===rq.date&&an.comp===rq.comp&&KhattiCore.integer(rq.seats,1,this.holFree(an))&&KhattiCore.future(an.date,an.time)},
   tripLine(t){return t.holId?this.hol(t.holId):this.line(t.lineId)},
   pname(){
     if(this._isCloud()){
@@ -349,7 +321,6 @@ Object.assign(K,{
     n.unshift({msg,link,d:"الآن"});
     this.set("holNotifs",n);
   },
-  holNotifs(){return this.get("holNotifs",[])},
   holBanner(){
     const n=this.get("holNotifs",[]);
     if(!n.length)return;
