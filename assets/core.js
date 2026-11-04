@@ -33,7 +33,66 @@
     future(date,time="23:59",now=Date.now()){if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!this.time(time))return false;const d=new Date(date+"T"+time+":00+03:00");return Number.isFinite(+d)&&new Date(date+"T12:00:00Z").toISOString().slice(0,10)===date&&+d>now},
     canRate(t){return Boolean(t)&&t.status==="done"&&!t.rated},
     canRevealRating(myRated,otherRated){
-      return Boolean(myRated)&&Boolean(otherRated);
+      const hasMine=this.record(myRated)?Boolean(myRated.rated||(Number(myRated.stars??myRated.s)>=1&&Number(myRated.stars??myRated.s)<=5)):Boolean(myRated);
+      const hasOther=this.record(otherRated)?Boolean(otherRated.otherRated||otherRated.hasOther||(Number(otherRated.stars??otherRated.s)>=1&&Number(otherRated.stars??otherRated.s)<=5)):Boolean(otherRated);
+      return hasMine&&hasOther;
+    },
+    resolveRatingReveal(myRated,hasOtherRatingFlag){
+      return this.canRevealRating(myRated,Boolean(hasOtherRatingFlag));
+    },
+    buildAtomicBookingPayload(booking){
+      const b=this.record(booking)?booking:{};
+      const pay=this.record(b.payment)?b.payment:{};
+      return {
+        p_line_id:String(b.line_id??b.lineId??"").trim(),
+        p_passenger_name:String(b.passenger_name??b.passengerName??b.name??"").trim(),
+        p_phone:String(b.phone??"").trim(),
+        p_plan_label:String(b.plan_label??b.planLabel??b.plan??"").trim(),
+        p_seats:Array.isArray(b.seats)?b.seats:[],
+        p_pickup:String(b.pickup??"").trim(),
+        p_return_shift:String(b.return_shift??b.returnShift??"14:30").trim()||"14:30",
+        p_pay_method:String(pay.method??b.pay_method??"cash").trim()||"cash",
+        p_pay_status:String(pay.status??b.pay_status??"pending").trim()||"pending",
+        p_pay_ref:String(pay.ref??b.pay_ref??"").trim()
+      };
+    },
+    passengerNameFromSession(session,fallback=""){
+      if(!this.record(session))return fallback;
+      const u=this.record(session.user)?session.user:session;
+      const meta=this.record(u.user_metadata)?u.user_metadata:(this.record(session.user_metadata)?session.user_metadata:(this.record(u.data)?u.data:{}));
+      const rawName=String(meta.name??meta.full_name??u.name??u.full_name??session.name??"").trim();
+      if(rawName)return rawName;
+      const email=String(u.email??session.email??"").trim();
+      if(email){
+        const atIdx=email.indexOf("@");
+        const prefix=(atIdx>0?email.slice(0,atIdx):email).trim();
+        if(prefix)return prefix;
+      }
+      return fallback;
+    },
+    selectAttendanceSyncAction(status,isCloudConfigured=true){
+      if(!isCloudConfigured)return "local";
+      const st=String(status??"").trim();
+      if(st==="absent")return "mark_absent";
+      if(st==="waiting"||st==="boarded"||st==="arrived")return "push_attendance";
+      return "local";
+    },
+    resolveStudentParentCode(attRecord,bookingRecord,localStudent){
+      if(this.record(attRecord)){
+        const attCode=String(attRecord.parent_code??attRecord.code??"").trim();
+        if(attCode)return attCode;
+      }
+      if(this.record(bookingRecord)){
+        const bkCode=String(bookingRecord.parent_code??bookingRecord.parentCode??bookingRecord.code??"").trim();
+        if(bkCode)return bkCode;
+        const bkPhone=String(bookingRecord.phone??"").replace(/\D/g,"");
+        if(bkPhone.length>=4)return this.parentCode(bkPhone);
+      }
+      if(this.record(localStudent)){
+        const locCode=String(localStudent.parent_code??localStudent.parentCode??localStudent.code??"").trim();
+        if(locCode)return locCode;
+      }
+      return "KH-4829";
     },
     /* عتبة 4.5 مؤقتة لأن المرجع (PROMPT.md) اشترط تقييماً عالياً دون تحديد رقم */
     isTrustedDriver(line){
