@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>تفاصيل الخط — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/data-source.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/auth.js"></script><script src="../assets/cloud.js"></script><script src="../assets/data-source.js"></script><script src="../assets/app.js"></script>
 <script>
 (async function(){
   if(!K.access())return;
@@ -9,6 +9,17 @@
   const id=new URLSearchParams(location.search).get("id")||"l1";
   const l=K.line(id)||(Array.isArray(lines)?lines.find(x=>x.id===id):null);
   if(!l){K.missing();return;}
+  const cloud=window.KhattiCloud;
+  const isCloud=Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
+  let lineBroadcasts=[];
+  if(isCloud&&typeof cloud.pullBroadcasts==="function"){
+    try{
+      const remoteBroadcasts=await cloud.pullBroadcasts(l.id);
+      if(Array.isArray(remoteBroadcasts))lineBroadcasts=remoteBroadcasts;
+    }catch(_){}
+  }else{
+    lineBroadcasts=K.get("broadcasts",[]).filter(b=>b&&(!b.line_id&&!b.lineId||b.line_id===l.id||b.lineId===l.id));
+  }
   $("#app").innerHTML=`
     <div class="card">
       <div class="row">${K.badge(l.comp)}${K.trusted(l)}<span class="grow"></span><b>${K.fmt(l.price)}/شهر</b></div>
@@ -22,6 +33,10 @@
       </div>
     </div>
     <div class="card"><h3>📍 محطات التجمع</h3>${K.stepperHTML(l,1)}</div>
+    <div class="card" id="line-broadcasts">
+      <h3>📢 تنبيهات الخط</h3>
+      ${lineBroadcasts.length===0?'<div class="mut">لا توجد تنبيهات حالية على هذا الخط.</div>':lineBroadcasts.map(b=>`<div class="note" style="margin-bottom:6px;"><b>${K.esc(b.time_label||b.time||b.d||"الآن")}:</b> ${K.esc(b.msg||b.t||"")}</div>`).join("")}
+    </div>
   `;
 })();
 </script></body></html>

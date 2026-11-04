@@ -146,6 +146,28 @@ create table if not exists public.khatti_driver_profiles (
   created_at timestamptz default now()
 );
 
+-- 8. جدول رسائل محادثة الرحلة الجماعية بين السائق والركاب (Chat Messages)
+-- قناة المحادثة = (line_id + trip_date) داخل نافذة الرحلة فقط
+create table if not exists public.khatti_chat_messages (
+  id text primary key,
+  line_id text not null,
+  trip_date text not null,
+  sender_role text check (sender_role in ('passenger', 'driver')),
+  sender_name text not null,
+  sender_user_id uuid,
+  msg text not null,
+  created_at timestamptz default now()
+);
+
+-- 9. جدول طلبات التنبيه عند توفر مقاعد على الخطوط الممتلئة (Availability Notify Requests)
+-- ملاحظة: التنبيه داخل التطبيق فقط في هذه الشريحة؛ لا رسائل SMS أو واتساب لأنها تحتاج مزودًا خارجيًا.
+create table if not exists public.khatti_notify_requests (
+  id text primary key,
+  line_id text not null,
+  user_id uuid not null,
+  created_at timestamptz default now()
+);
+
 -- ============================================================================
 -- تُطبَّق بعد نشر الكود فقط، لا قبله
 -- ============================================================================
@@ -157,6 +179,8 @@ alter table public.khatti_bookings enable row level security;
 alter table public.khatti_broadcasts enable row level security;
 alter table public.khatti_ratings enable row level security;
 alter table public.khatti_driver_profiles enable row level security;
+alter table public.khatti_chat_messages enable row level security;
+alter table public.khatti_notify_requests enable row level security;
 
 -- ترقية الأعمدة الأمنية الإضافية (قابلة لإعادة التشغيل)
 alter table public.khatti_ratings add column if not exists rater_user_id uuid;
@@ -383,6 +407,68 @@ create policy "khatti_driver_profiles_insert_own" on public.khatti_driver_profil
 drop policy if exists "khatti_driver_profiles_update_own" on public.khatti_driver_profiles;
 create policy "khatti_driver_profiles_update_own" on public.khatti_driver_profiles
   for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- سياسات khatti_chat_messages (تُطبَّق بعد نشر الكود فقط، لا قبله):
+-- قراءة وإدراج للموثّقين المشاركين فقط (صاحب حجز على الخط أو سائق الخط) مع sender_user_id = auth.uid() عند الإدراج
+drop policy if exists "khatti_chat_messages_select_participants" on public.khatti_chat_messages;
+create policy "khatti_chat_messages_select_participants" on public.khatti_chat_messages
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.khatti_bookings b
+      where b.line_id = khatti_chat_messages.line_id and b.user_id = auth.uid()
+    )
+    or exists (
+      select 1 from public.khatti_lines l
+      where l.id = khatti_chat_messages.line_id and l.driver_id = auth.uid()
+    )
+  );
+
+drop policy if exists "khatti_chat_messages_insert_participants" on public.khatti_chat_messages;
+create policy "khatti_chat_messages_insert_participants" on public.khatti_chat_messages
+  for insert to authenticated
+  with check (
+    sender_user_id = auth.uid()
+    and (
+      exists (
+        select 1 from public.khatti_bookings b
+        where b.line_id = khatti_chat_messages.line_id and b.user_id = auth.uid()
+      )
+      or exists (
+        select 1 from public.khatti_lines l
+        where l.id = khatti_chat_messages.line_id and l.driver_id = auth.uid()
+      )
+    )
+  );
+
+-- سياسات khatti_notify_requests (تُطبَّق بعد نشر الكود فقط، لا قبله):
+-- إدراج/قراءة لصاحب الطلب نفسه، وقراءة لسائق الخط
+drop policy if exists "khatti_notify_requests_select_auth" on public.khatti_notify_requests;
+create policy "khatti_notify_requests_select_auth" on public.khatti_notify_requests
+  for select to authenticated
+  using (
+    user_id = auth.uid()
+    or exists (
+      select 1 from public.khatti_lines l
+      where l.id = khatti_notify_requests.line_id and l.driver_id = auth.uid()
+    )
+  );
+
+drop policy if exists "khatti_notify_requests_insert_own" on public.khatti_notify_requests;
+create policy "khatti_notify_requests_insert_own" on public.khatti_notify_requests
+  for insert to authenticated
+  with check (user_id = auth.uid());
+
+drop policy if exists "khatti_notify_requests_update_own" on public.khatti_notify_requests;
+create policy "khatti_notify_requests_update_own" on public.khatti_notify_requests
+  for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists "khatti_notify_requests_delete_own" on public.khatti_notify_requests;
+create policy "khatti_notify_requests_delete_own" on public.khatti_notify_requests
+  for delete to authenticated
+  using (user_id = auth.uid());
 
 -- M1: منع تعديل حالة ملف السائق ذاتيًا (تغيير status متاح للإدارة عبر لوحة التحكم فقط)
 create or replace function public.prevent_driver_profile_status_self_update()

@@ -399,7 +399,9 @@
           },
           body: JSON.stringify(payload)
         });
-        return Boolean(res && res.ok);
+        const ok = Boolean(res && res.ok);
+        if(ok && !line.id) line.id = lineId;
+        return ok;
       } catch(e){ return false; }
     },
 
@@ -626,6 +628,207 @@
           role: String(r.rater_role ?? r.role ?? ""),
           stars: Number(r.stars),
           comment: String(r.comment ?? "")
+        }));
+      } catch(e){ return []; }
+    },
+
+    /* 1. المحادثة السحابية الجماعية للرحلة: إرسال رسالة إلى جدول khatti_chat_messages (قناة = line_id + trip_date) */
+    async pushChatMessage(input, roleArg, nameArg, msgArg, tripDateArg){
+      if(!this.isConfigured()) return false;
+      let lineId = "", tripDate = "", senderRole = "", senderName = "", msg = "", customId = "";
+      if(input && typeof input === "object"){
+        lineId = String(input.line_id ?? input.lineId ?? "").trim();
+        tripDate = String(input.trip_date ?? input.tripDate ?? "").trim();
+        senderRole = String(input.sender_role ?? input.senderRole ?? input.role ?? "passenger").trim();
+        senderName = String(input.sender_name ?? input.senderName ?? input.name ?? "").trim();
+        msg = String(input.msg ?? input.t ?? input.text ?? "").trim();
+        customId = String(input.id ?? "").trim();
+      } else {
+        lineId = String(input ?? "").trim();
+        senderRole = String(roleArg ?? "passenger").trim();
+        senderName = String(nameArg ?? "").trim();
+        msg = String(msgArg ?? "").trim();
+        tripDate = String(tripDateArg ?? "").trim();
+      }
+      if(!tripDate){
+        tripDate = (typeof KhattiCore !== "undefined" && KhattiCore && typeof KhattiCore.today === "function")
+          ? KhattiCore.today()
+          : new Date().toISOString().slice(0, 10);
+      }
+      if(!lineId || !tripDate || !msg || !["passenger", "driver"].includes(senderRole)) return false;
+      const senderUserId = this._getSessionUserId();
+      if(!senderUserId) return false;
+      const cfg = this.getConfig();
+      const payload = {
+        id: customId || `cm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        line_id: lineId,
+        trip_date: tripDate,
+        sender_role: senderRole,
+        sender_name: senderName || (senderRole === "driver" ? "السائق" : "راكب"),
+        sender_user_id: senderUserId,
+        msg
+      };
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/khatti_chat_messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify(payload)
+        });
+        return Boolean(res && res.ok);
+      } catch(e){ return false; }
+    },
+
+    /* 1. المحادثة السحابية الجماعية للرحلة: جلب رسائل قناة (line_id + trip_date) (يُستطلع كل 15 ثانية داخل نافذة الرحلة فقط) */
+    async pullChatMessages(lineId, tripDate){
+      const cleanLineId = String(lineId ?? "").trim();
+      const cleanDate = String(
+        tripDate || (typeof KhattiCore !== "undefined" && KhattiCore && typeof KhattiCore.today === "function" ? KhattiCore.today() : new Date().toISOString().slice(0, 10))
+      ).trim();
+      if(!this.isConfigured() || !cleanLineId || !cleanDate) return [];
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(
+          `${cfg.url}/rest/v1/khatti_chat_messages?line_id=eq.${encodeURIComponent(cleanLineId)}&trip_date=eq.${encodeURIComponent(cleanDate)}&order=created_at.asc&select=*`
+        );
+        if(!res || !res.ok) return [];
+        const rows = await res.json();
+        if(!Array.isArray(rows)) return [];
+        const myUid = this._getSessionUserId();
+        return rows.filter(r => r && typeof r === "object").map(r => {
+          const created = r.created_at ? new Date(r.created_at) : null;
+          const timeStr = (created && Number.isFinite(+created))
+            ? created.toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" })
+            : String(r.time ?? "الآن");
+          return {
+            id: String(r.id ?? ""),
+            line_id: String(r.line_id ?? cleanLineId),
+            trip_date: String(r.trip_date ?? cleanDate),
+            sender_role: String(r.sender_role ?? "passenger"),
+            sender_name: String(r.sender_name ?? ""),
+            sender_user_id: r.sender_user_id ? String(r.sender_user_id) : null,
+            msg: String(r.msg ?? ""),
+            t: String(r.msg ?? ""),
+            time: timeStr,
+            created_at: r.created_at || null,
+            me: Boolean(myUid && r.sender_user_id && String(r.sender_user_id) === myUid)
+          };
+        });
+      } catch(e){ return []; }
+    },
+
+    /* 2. تنبيه التوفر: تسجيل طلب تنبيه عند توفر مقاعد في جدول khatti_notify_requests
+     * ملاحظة: التنبيه داخل التطبيق فقط في هذه الشريحة؛ لا رسائل SMS أو واتساب لأنها تحتاج مزودًا خارجيًا.
+     */
+    async pushNotifyRequest(input){
+      if(!this.isConfigured()) return false;
+      const lineId = (input && typeof input === "object")
+        ? String(input.line_id ?? input.lineId ?? "").trim()
+        : String(input ?? "").trim();
+      const userId = this._getSessionUserId();
+      if(!lineId || !userId) return false;
+      const customId = (input && typeof input === "object" && input.id) ? String(input.id).trim() : "";
+      const cfg = this.getConfig();
+      const payload = {
+        id: customId || `${lineId}:${userId}`,
+        line_id: lineId,
+        user_id: userId
+      };
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/khatti_notify_requests`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify(payload)
+        });
+        return Boolean(res && res.ok);
+      } catch(e){ return false; }
+    },
+
+    /* 2. تنبيه التوفر: جلب طلبات التنبيه عند التوفر (للمستخدم الحالي أو لخطوط السائق حسب سياسات RLS) */
+    async pullNotifyRequests(lineId){
+      if(!this.isConfigured()) return [];
+      const cleanLineId = String(lineId ?? "").trim();
+      const cfg = this.getConfig();
+      const query = cleanLineId
+        ? `line_id=eq.${encodeURIComponent(cleanLineId)}&select=*`
+        : `select=*`;
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/khatti_notify_requests?${query}`);
+        if(!res || !res.ok) return [];
+        const rows = await res.json();
+        if(!Array.isArray(rows)) return [];
+        return rows.filter(r => r && typeof r === "object").map(r => ({
+          id: String(r.id ?? ""),
+          line_id: String(r.line_id ?? ""),
+          user_id: String(r.user_id ?? ""),
+          created_at: r.created_at || null
+        }));
+      } catch(e){ return []; }
+    },
+
+    /* 4. تنبيه تغيير الخط والتنبيهات العامة: إدراج تنبيه سحابي في جدول khatti_broadcasts */
+    async pushBroadcast(input, msgArg, timeLabelArg){
+      if(!this.isConfigured()) return false;
+      let lineId = "", msg = "", timeLabel = "", customId = "";
+      if(input && typeof input === "object"){
+        lineId = String(input.line_id ?? input.lineId ?? "l1").trim() || "l1";
+        msg = String(input.msg ?? input.t ?? "").trim();
+        timeLabel = String(input.time_label ?? input.timeLabel ?? input.time ?? input.d ?? "").trim();
+        customId = String(input.id ?? "").trim();
+      } else {
+        lineId = String(input || "l1").trim() || "l1";
+        msg = String(msgArg ?? "").trim();
+        timeLabel = String(timeLabelArg ?? "").trim();
+      }
+      if(!lineId || !msg) return false;
+      if(!timeLabel){
+        timeLabel = new Date().toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" });
+      }
+      const cfg = this.getConfig();
+      const payload = {
+        id: customId || `b_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        line_id: lineId,
+        msg,
+        time_label: timeLabel
+      };
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/khatti_broadcasts`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify(payload)
+        });
+        return Boolean(res && res.ok);
+      } catch(e){ return false; }
+    },
+
+    /* 4. جلب تنبيهات خط معين من جدول khatti_broadcasts */
+    async pullBroadcasts(lineId){
+      const cleanLineId = String(lineId ?? "").trim();
+      if(!this.isConfigured() || !cleanLineId) return [];
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(
+          `${cfg.url}/rest/v1/khatti_broadcasts?line_id=eq.${encodeURIComponent(cleanLineId)}&order=created_at.desc&select=*`
+        );
+        if(!res || !res.ok) return [];
+        const rows = await res.json();
+        if(!Array.isArray(rows)) return [];
+        return rows.filter(r => r && typeof r === "object").map(r => ({
+          id: String(r.id ?? ""),
+          line_id: String(r.line_id ?? cleanLineId),
+          msg: String(r.msg ?? ""),
+          t: String(r.msg ?? ""),
+          time_label: String(r.time_label ?? r.time ?? "الآن"),
+          time: String(r.time_label ?? r.time ?? "الآن"),
+          created_at: r.created_at || null
         }));
       } catch(e){ return []; }
     }
