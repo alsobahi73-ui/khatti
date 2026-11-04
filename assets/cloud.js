@@ -171,6 +171,69 @@
       } catch(e){ return false; }
     },
 
+    /* H1: استرجاع هاتف الخط عبر دالة get_line_phone (للسائق المالك أو صاحب حجز فقط، دون إظهاره في الواجهات) */
+    async getLinePhone(lineId){
+      const cleanId = String(lineId ?? "").trim();
+      if(!this.isConfigured() || !cleanId) return null;
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/rpc/get_line_phone`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ p_line_id: cleanId })
+        });
+        if(!res || !res.ok) return null;
+        if(typeof res.json === "function"){
+          const data = await res.json();
+          return (typeof data === "string" && data.trim()) ? data.trim() : null;
+        }
+        return null;
+      } catch(e){ return null; }
+    },
+
+    /* H4: بناء حمولة الحجز الذري دون تمرير user_id من العميل (يؤخذ من auth.uid() خادميًا) */
+    buildAtomicBookingPayload(booking){
+      const b = (booking && typeof booking === "object") ? booking : {};
+      const pay = (b.payment && typeof b.payment === "object") ? b.payment : {};
+      return {
+        p_line_id: String(b.line_id ?? b.lineId ?? "").trim(),
+        p_passenger_name: String(b.passenger_name ?? b.passengerName ?? b.name ?? "").trim(),
+        p_phone: String(b.phone ?? "").trim(),
+        p_plan_label: String(b.plan_label ?? b.planLabel ?? b.plan ?? "").trim(),
+        p_seats: Array.isArray(b.seats) ? b.seats : [],
+        p_pickup: String(b.pickup ?? "").trim(),
+        p_return_shift: String(b.return_shift ?? b.returnShift ?? "14:30").trim() || "14:30",
+        p_pay_method: String(pay.method ?? b.pay_method ?? "cash").trim() || "cash",
+        p_pay_status: String(pay.status ?? b.pay_status ?? "pending").trim() || "pending",
+        p_pay_ref: String(pay.ref ?? b.pay_ref ?? "").trim()
+      };
+    },
+
+    /* H4: إنشاء حجز ذري سحابيًا عبر دالة create_booking_atomic (يعيد معرّف الحجز أو null عند عدم الكفاية) */
+    async createBookingAtomic(booking){
+      if(!this.isConfigured() || !booking || typeof booking !== "object") return null;
+      const payload = this.buildAtomicBookingPayload(booking);
+      if(!payload.p_line_id || !Array.isArray(payload.p_seats) || payload.p_seats.length < 1) return null;
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/rpc/create_booking_atomic`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        if(!res || !res.ok) return null;
+        if(typeof res.json === "function"){
+          const data = await res.json();
+          return (typeof data === "string" && data.trim()) ? data.trim() : null;
+        }
+        return null;
+      } catch(e){ return null; }
+    },
+
     /* إرسال الموقع اللحظي للسائق أو الراكب إلى سحابة Supabase */
     async pushLocation(lineId, role, name, lat, lng, speed=0){
       if(!this.isConfigured()) return false;
@@ -406,6 +469,18 @@
     async pushAttendance(student, lineId="l1", tripDate="2026-10-15"){
       if(!this.isConfigured() || !student) return false;
       const cfg = this.getConfig();
+      const payload = {
+        student_id: student.id,
+        line_id: lineId,
+        student_name: student.name,
+        stop_name: student.stop,
+        parent_code: student.parent_code ?? student.code,
+        status: student.status,
+        trip_date: tripDate,
+        updated_at: new Date().toISOString()
+      };
+      const uid = String(student.user_id || student.userId || this._getSessionUserId() || "").trim();
+      if(uid) payload.user_id = uid;
       try {
         const res = await this._request(`${cfg.url}/rest/v1/khatti_attendance?on_conflict=student_id,trip_date,line_id`, {
           method: "POST",
@@ -413,18 +488,39 @@
             "Content-Type": "application/json",
             Prefer: "resolution=merge-duplicates"
           },
-          body: JSON.stringify({
-            student_id: student.id,
-            line_id: lineId,
-            student_name: student.name,
-            stop_name: student.stop,
-            parent_code: student.code,
-            status: student.status,
-            trip_date: tripDate,
-            updated_at: new Date().toISOString()
-          })
+          body: JSON.stringify(payload)
         });
         return Boolean(res && res.ok);
+      } catch(e){ return false; }
+    },
+
+    /* M3: تسجيل غياب الراكب عبر دالة mark_absent الخادمية الآمنة */
+    async markAbsent(lineId="l1", studentId="st_1", tripDate){
+      const cleanLineId = String(lineId ?? "").trim();
+      const cleanStudentId = String(studentId ?? "").trim();
+      const cleanDate = String(
+        tripDate || (typeof KhattiCore !== "undefined" && KhattiCore && typeof KhattiCore.today === "function" ? KhattiCore.today() : "2026-10-15")
+      ).trim();
+      if(!this.isConfigured() || !cleanLineId || !cleanStudentId || !cleanDate) return false;
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/rpc/mark_absent`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            p_line_id: cleanLineId,
+            p_student_id: cleanStudentId,
+            p_trip_date: cleanDate
+          })
+        });
+        if(!res || !res.ok) return false;
+        if(typeof res.json === "function"){
+          const data = await res.json();
+          return Boolean(data);
+        }
+        return true;
       } catch(e){ return false; }
     },
 
@@ -463,13 +559,23 @@
       } catch(e){ return false; }
     },
 
-    /* مزامنة تقييم الرحلة (راكب أو سائق) سحابياً في جدول khatti_ratings */
+    /* M2: مزامنة تقييم الرحلة (راكب أو سائق) سحابياً في جدول khatti_ratings مع ضبط rater_user_id من الجلسة */
     async pushRating(rating){
       if(!this.isConfigured() || !rating || typeof rating !== "object") return false;
       const tripId = String(rating.tripId ?? rating.trip_id ?? "").trim();
       const role = String(rating.role ?? rating.rater_role ?? "").trim();
       if(!tripId || !role) return false;
       const cfg = this.getConfig();
+      const raterUserId = String(this._getSessionUserId() || rating.rater_user_id || rating.raterUserId || "").trim();
+      const payload = {
+        id: `${tripId}:${role}`,
+        trip_id: tripId,
+        line_id: String(rating.lineId ?? rating.line_id ?? ""),
+        rater_role: role,
+        stars: Number(rating.stars),
+        comment: String(rating.comment ?? ""),
+        rater_user_id: raterUserId || null
+      };
       try {
         const res = await this._request(`${cfg.url}/rest/v1/khatti_ratings`, {
           method: "POST",
@@ -477,16 +583,32 @@
             "Content-Type": "application/json",
             Prefer: "resolution=merge-duplicates"
           },
-          body: JSON.stringify({
-            id: `${tripId}:${role}`,
-            trip_id: tripId,
-            line_id: String(rating.lineId ?? rating.line_id ?? ""),
-            rater_role: role,
-            stars: Number(rating.stars),
-            comment: String(rating.comment ?? "")
-          })
+          body: JSON.stringify(payload)
         });
         return Boolean(res && res.ok);
+      } catch(e){ return false; }
+    },
+
+    /* M2: التحقق من وجود تقييم الطرف المقابل عبر دالة has_other_rating الخادمية */
+    async hasOtherRating(tripId, role){
+      const cleanTripId = String(tripId ?? "").trim();
+      const cleanRole = String(role ?? "").trim();
+      if(!this.isConfigured() || !cleanTripId || !cleanRole) return false;
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/rpc/has_other_rating`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ p_trip_id: cleanTripId, p_role: cleanRole })
+        });
+        if(!res || !res.ok) return false;
+        if(typeof res.json === "function"){
+          const data = await res.json();
+          return Boolean(data);
+        }
+        return false;
       } catch(e){ return false; }
     },
 
