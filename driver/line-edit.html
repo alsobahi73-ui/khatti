@@ -141,6 +141,13 @@
         K.toast("تعذّر حفظ بيانات الخط سحابيًا؛ تحقق من الاتصال أو الصلاحيات وحاول مجددًا");
         return;
       }
+      if(typeof cloud.pushBroadcast==="function"){
+        try{
+          const broadcastLineId=linePayload.id||targetId||l.id||MYDRIVER.lineId||"l1";
+          const alertMsg=KhattiCore.buildLineUpdateBroadcastMsg(linePayload);
+          await cloud.pushBroadcast({line_id:broadcastLineId,msg:alertMsg});
+        }catch(_){}
+      }
       K.toast(isNew?"تم إنشاء الخط سحابيًا بنجاح":"تم حفظ تعديلات الخط سحابيًا بنجاح");
       setTimeout(()=>location.href="index.html",900);
       return;
