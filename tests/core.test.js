@@ -202,3 +202,85 @@ test('Slice 3 pure logic: chatChannelKey, canChatInWindow gate, filterLines (max
  // 5. نص تنبيه تعديل الخط
  assert.equal(C.buildLineUpdateBroadcastMsg({from:'الكرادة',to:'الجادرية'}),'تم تعديل خط الكرادة ← الجادرية');
 });
+
+test('Slice 4 pure logic: isValidSubscriptionPayMethod, buildSubscriptionPayload (manual amount & pending status), and formatErrorReport',()=>{
+ // 1. التحقق من طريقة الدفع المسموحة ('cash','zain','asia')
+ assert.equal(C.isValidSubscriptionPayMethod('cash'),true);
+ assert.equal(C.isValidSubscriptionPayMethod('zain'),true);
+ assert.equal(C.isValidSubscriptionPayMethod('asia'),true);
+ assert.equal(C.isValidSubscriptionPayMethod(' zain '),true);
+ assert.equal(C.isValidSubscriptionPayMethod('zaincash'),false);
+ assert.equal(C.isValidSubscriptionPayMethod('asiahawala'),false);
+ assert.equal(C.isValidSubscriptionPayMethod('card'),false);
+ assert.equal(C.isValidSubscriptionPayMethod(''),false);
+ assert.equal(C.isValidSubscriptionPayMethod(null),false);
+
+ // 2. بناء حمولة الاشتراك (buildSubscriptionPayload): حالة pending دائماً ومبلغ يدوي أو null دون أي حساب آلي
+ const subWithAmount=C.buildSubscriptionPayload({
+  id:'sub_custom_1',
+  driver_id:'spoofed_driver',
+  plan_label:'اشتراك سائق فصلي',
+  months:3,
+  amount:50000,
+  pay_method:'zain',
+  pay_ref:'ZN-7788',
+  status:'confirmed'
+ },'drv-session-uuid');
+ assert.deepEqual(subWithAmount,{
+  id:'sub_custom_1',
+  driver_id:'drv-session-uuid',
+  plan_label:'اشتراك سائق فصلي',
+  months:3,
+  amount:50000,
+  pay_method:'zain',
+  pay_ref:'ZN-7788',
+  status:'pending',
+  starts_at:null,
+  ends_at:null
+ });
+
+ // ترك المبلغ فارغاً يبقيه null دون ضرب الأشهر أو اختراع سعر
+ const subBlankAmount=C.buildSubscriptionPayload({
+  plan_label:'اشتراك سائق شهري',
+  months:6,
+  amount:'',
+  pay_method:'asia',
+  pay_ref:'AS-1122'
+ },'drv-session-uuid');
+ assert.equal(subBlankAmount.months,6);
+ assert.equal(subBlankAmount.amount,null);
+ assert.equal(subBlankAmount.pay_method,'asia');
+ assert.equal(subBlankAmount.status,'pending');
+ assert.match(subBlankAmount.id,/^sub_/);
+
+ // رفض طريقة دفع غير مسموحة أو أشهر غير صالحة
+ assert.equal(C.buildSubscriptionPayload({plan_label:'شهري',months:1,pay_method:'bitcoin'},'drv-1'),null);
+ assert.equal(C.buildSubscriptionPayload({plan_label:'شهري',months:0,pay_method:'cash'},'drv-1'),null);
+ assert.equal(C.buildSubscriptionPayload({plan_label:'شهري',months:1,amount:-100,pay_method:'cash'},'drv-1'),null);
+
+ // 3. تنسيق تقرير الخطأ (formatErrorReport)
+ const rep1=C.formatErrorReport('/driver/index.html','فشل مزامنة الخطوط',new Error('HTTP 503 Service Unavailable'),'uid-123');
+ assert.equal(rep1.page,'/driver/index.html');
+ assert.equal(rep1.message,'فشل مزامنة الخطوط');
+ assert.equal(rep1.user_id,'uid-123');
+ assert.match(rep1.details,/HTTP 503 Service Unavailable/);
+ assert.match(rep1.id,/^er_/);
+
+ const repObj=C.formatErrorReport({
+  id:'er_fixed_1',
+  page:'/passenger/booking.html',
+  message:'تعذّر الحجز السحابي',
+  details:{code:'PGRST301',status:401},
+  user_id:'uid-999'
+ });
+ assert.deepEqual(repObj,{
+  id:'er_fixed_1',
+  user_id:'uid-999',
+  page:'/passenger/booking.html',
+  message:'تعذّر الحجز السحابي',
+  details:'{"code":"PGRST301","status":401}'
+ });
+
+ // رسالة فارغة تعيد null
+ assert.equal(C.formatErrorReport('/index.html','   ','details'),null);
+});
