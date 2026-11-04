@@ -831,6 +831,162 @@
           created_at: r.created_at || null
         }));
       } catch(e){ return []; }
+    },
+
+    /* الشريحة 4 (1): التحقق من طريقة الدفع المسموحة لاشتراكات السائقين ('cash','zain','asia') */
+    isValidSubscriptionPayMethod(method){
+      return typeof method === "string" && ["cash", "zain", "asia"].includes(method.trim());
+    },
+
+    /* الشريحة 4 (1): بناء حمولة اشتراك السائق اليدوي بحالة pending دائمًا ودون حساب آلي للمبلغ */
+    buildSubscriptionPayload(sub, sessionDriverId){
+      if(!sub || typeof sub !== "object" || Array.isArray(sub)) return null;
+      const driverId = String(sessionDriverId || sub.driver_id || sub.driverId || "").trim();
+      const rawMethod = sub.pay_method !== undefined ? sub.pay_method : (sub.payMethod !== undefined ? sub.payMethod : sub.method);
+      const payMethod = (rawMethod === undefined || rawMethod === null || String(rawMethod).trim() === "") ? "cash" : String(rawMethod).trim();
+      if(!this.isValidSubscriptionPayMethod(payMethod)) return null;
+      const rawMonths = (sub.months !== undefined && sub.months !== null && String(sub.months).trim() !== "") ? sub.months : 1;
+      const monthsNum = Number(rawMonths);
+      if(!Number.isInteger(monthsNum) || monthsNum < 1 || monthsNum > 36) return null;
+      let amount = null;
+      const rawAmount = sub.amount;
+      if(rawAmount !== undefined && rawAmount !== null && String(rawAmount).trim() !== ""){
+        const amtNum = Number(rawAmount);
+        if(!Number.isInteger(amtNum) || amtNum < 0 || amtNum > 100000000) return null;
+        amount = amtNum;
+      }
+      const planLabel = String(sub.plan_label ?? sub.planLabel ?? sub.plan ?? "اشتراك سائق شهري").trim() || "اشتراك سائق شهري";
+      const payRef = String(sub.pay_ref ?? sub.payRef ?? sub.ref ?? "").trim();
+      const customId = String(sub.id ?? "").trim();
+      return {
+        id: customId || `sub_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        driver_id: driverId,
+        plan_label: planLabel,
+        months: monthsNum,
+        amount,
+        pay_method: payMethod,
+        pay_ref: payRef,
+        status: "pending",
+        starts_at: null,
+        ends_at: null
+      };
+    },
+
+    /* الشريحة 4 (1): إرسال طلب اشتراك/تجديد سائق إلى جدول khatti_driver_subscriptions بحالة pending */
+    async pushSubscription(sub){
+      if(!this.isConfigured() || !sub || typeof sub !== "object") return false;
+      const driverId = this._getSessionUserId();
+      if(!driverId) return false;
+      const payload = this.buildSubscriptionPayload(sub, driverId);
+      if(!payload || !payload.driver_id) return false;
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(`${cfg.url}/rest/v1/khatti_driver_subscriptions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify(payload)
+        });
+        return Boolean(res && res.ok);
+      } catch(e){ return false; }
+    },
+
+    /* الشريحة 4 (1): جلب اشتراكات السائق الحالي من جدول khatti_driver_subscriptions */
+    async pullMySubscriptions(driverId){
+      if(!this.isConfigured()) return [];
+      const uid = String(driverId || this._getSessionUserId() || "").trim();
+      if(!uid) return [];
+      const cfg = this.getConfig();
+      try {
+        const res = await this._request(
+          `${cfg.url}/rest/v1/khatti_driver_subscriptions?driver_id=eq.${encodeURIComponent(uid)}&order=created_at.desc&select=*`
+        );
+        if(!res || !res.ok) return [];
+        const rows = await res.json();
+        if(!Array.isArray(rows)) return [];
+        return rows.filter(r => r && typeof r === "object").map(r => ({
+          id: String(r.id ?? ""),
+          driver_id: String(r.driver_id ?? uid),
+          plan_label: String(r.plan_label ?? ""),
+          months: Number.isInteger(Number(r.months)) ? Number(r.months) : 1,
+          amount: (r.amount !== null && r.amount !== undefined && r.amount !== "" && Number.isFinite(Number(r.amount))) ? Number(r.amount) : null,
+          pay_method: String(r.pay_method ?? "cash"),
+          pay_ref: String(r.pay_ref ?? ""),
+          status: String(r.status ?? "pending"),
+          starts_at: r.starts_at || null,
+          ends_at: r.ends_at || null,
+          created_at: r.created_at || null
+        }));
+      } catch(e){ return []; }
+    },
+
+    /* الشريحة 4 (2): تنسيق حمولة تقرير الخطأ الداخلي */
+    formatErrorReport(pageOrObj, messageArg, detailsArg, userIdArg){
+      let page = "", message = "", detailsRaw = "", userId = "", customId = "";
+      if(pageOrObj && typeof pageOrObj === "object" && !Array.isArray(pageOrObj) && !(pageOrObj instanceof Error)){
+        page = String(pageOrObj.page ?? "").trim();
+        const rawMsg = pageOrObj.message ?? pageOrObj.msg ?? "";
+        message = rawMsg instanceof Error ? String(rawMsg.message || rawMsg).trim() : String(rawMsg).trim();
+        detailsRaw = pageOrObj.details ?? pageOrObj.detail ?? "";
+        userId = String(userIdArg ?? pageOrObj.user_id ?? pageOrObj.userId ?? "").trim();
+        customId = String(pageOrObj.id ?? "").trim();
+      } else {
+        page = String(pageOrObj ?? "").trim();
+        message = messageArg instanceof Error ? String(messageArg.message || messageArg).trim() : String(messageArg ?? "").trim();
+        detailsRaw = detailsArg ?? "";
+        userId = String(userIdArg ?? "").trim();
+      }
+      if(!message) return null;
+      let details = "";
+      if(detailsRaw instanceof Error){
+        details = String(detailsRaw.stack || detailsRaw.message || detailsRaw).trim();
+      } else if(detailsRaw !== null && typeof detailsRaw === "object"){
+        try { details = JSON.stringify(detailsRaw); } catch(e){ details = String(detailsRaw); }
+      } else {
+        details = String(detailsRaw ?? "").trim();
+      }
+      if(!page && typeof location !== "undefined" && location && location.pathname){
+        page = String(location.pathname).trim();
+      }
+      return {
+        id: customId || `er_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        user_id: userId || null,
+        page: page || "/",
+        message: message.slice(0, 500),
+        details: details.slice(0, 4000)
+      };
+    },
+
+    /* الشريحة 4 (2): إرسال تقرير خطأ إلى جدول khatti_error_reports عند التكييف مع تجاهل الفشل بصمت تام */
+    async reportError(page, message, details){
+      try {
+        if(!this.isConfigured()) return false;
+        const userId = this._getSessionUserId();
+        const payload = this.formatErrorReport(page, message, details, userId);
+        if(!payload || !payload.message) return false;
+        const cfg = this.getConfig();
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 10000);
+        try {
+          const headers = this._buildHeaders({
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates"
+          });
+          const res = await fetch(`${cfg.url}/rest/v1/khatti_error_reports`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload),
+            signal: ctrl.signal
+          });
+          return Boolean(res && res.ok);
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch(e){
+        return false;
+      }
     }
   };
 
