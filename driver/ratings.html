@@ -4,13 +4,13 @@
 <div id="ratings-list"></div>
 </div>
 </main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/auth.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
   K.page("تقييمات وآراء المشتركين","index.html");
-  const cloudPaxRatings={};
-  let cloudPulled=false;
+  const cloudOtherRated={};
+  let cloudChecked=false;
   function render(){
     const l=K.line(MYDRIVER.lineId);
     const pxRatings=K.get("pxRatings",{});
@@ -22,13 +22,11 @@
       return;
     }
     const cloud=window.KhattiCloud;
-    if(!cloudPulled&&trips.length>0&&cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured()&&typeof cloud.pullRatings==="function"){
-      cloudPulled=true;
-      Promise.all(trips.map(t=>cloud.pullRatings(t.id).then(list=>{
-        if(!Array.isArray(list))return false;
-        const pax=list.find(r=>r&&(r.role==="passenger"||r.rater_role==="passenger"));
-        if(pax){
-          cloudPaxRatings[t.id]={tripId:t.id,stars:Number(pax.stars),comment:String(pax.comment??"")};
+    if(!cloudChecked&&trips.length>0&&cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured()&&typeof cloud.hasOtherRating==="function"){
+      cloudChecked=true;
+      Promise.all(trips.map(t=>cloud.hasOtherRating(t.id,"driver").then(has=>{
+        if(has){
+          cloudOtherRated[t.id]=true;
           return true;
         }
         return false;
@@ -39,8 +37,7 @@
     const commentsHTML=comments.map((c,i)=>{
       const myRated=Boolean(c.myRated||c.driverRated||c.r||(c.tripId&&KhattiCore.record(pxRatings)&&pxRatings[c.tripId]));
       const otherRated=c.otherRated!==undefined?Boolean(c.otherRated):Boolean(c.s!==undefined||c.stars!==undefined||c.t);
-      const tripDate=c.tripDate||c.date||c.serviceDate||"";
-      if(!KhattiCore.canRevealRating(myRated,otherRated,tripDate)){
+      if(!KhattiCore.resolveRatingReveal(myRated,otherRated)){
         return `<div class="card" style="margin-bottom:10px;"><div><strong>${K.esc(c.u||"مشترك")}</strong></div><div class="mut" style="margin-top:4px;">بانتظار تقييم الطرف الآخر</div>${!myRated?`<div style="margin-top:6px;"><input aria-label="رد تجريبي على التقييم ${i+1}" id="reply-${i}" placeholder="قيّم أو اكتب ردك لفتح التقييم..." style="width:70%;display:inline-block;padding:6px;"><button class="btn btn-p" onclick="sendReply(${i})" style="width:25%;display:inline-block;">رد</button></div>`:""}</div>`;
       }
       const rawStars=Number(c.s??c.stars);
@@ -62,23 +59,22 @@
       </div>`;
     }).join("");
     const tripsHTML=trips.map(t=>{
-      const pr=paxRatings.find(r=>r&&r.tripId===t.id)||cloudPaxRatings[t.id]||null;
+      const pr=paxRatings.find(r=>r&&r.tripId===t.id)||null;
       const myRated=Boolean(t.driverRated||(KhattiCore.record(pxRatings)&&pxRatings[t.id]));
-      const otherRated=Boolean(t.rated||pr);
-      const tripDate=t.serviceDate||t.date||t.tripDate||"";
+      const otherRated=Boolean(cloudOtherRated[t.id]||t.rated||pr);
       const formHTML=!myRated?`
         <div style="margin-top:8px;">
           <div class="field"><label for="dstar-${K.esc(t.id)}">تقييم الراكب (1-5)</label><select id="dstar-${K.esc(t.id)}"><option value="5">5 ★</option><option value="4">4 ★</option><option value="3">3 ★</option><option value="2">2 ★</option><option value="1">1 ★</option></select></div>
           <div class="field"><label for="dtxt-${K.esc(t.id)}">تعليق اختياري</label><textarea id="dtxt-${K.esc(t.id)}" rows="2" maxlength="2000" placeholder="اكتب تعليقك عن الراكب (اختياري)..."></textarea></div>
           <button type="button" class="btn btn-p" id="drate-${K.esc(t.id)}" onclick="saveDriverRating('${K.esc(t.id)}')">حفظ تقييمي</button>
         </div>`:"";
-      if(!KhattiCore.canRevealRating(myRated,otherRated,tripDate)){
+      if(!KhattiCore.resolveRatingReveal(myRated,otherRated)){
         return `<div class="card" style="margin-bottom:10px;"><div><strong>${K.esc(K.pname())}</strong> <span class="mut">(${K.esc(t.when||t.id)})</span></div><div class="mut" style="margin-top:4px;">بانتظار تقييم الطرف الآخر</div>${formHTML}</div>`;
       }
       const starsVal=pr?Number(pr.stars??pr.s):NaN;
       const commentTxt=pr?String(pr.comment??pr.t??"").trim():"";
       if(!pr||!Number.isFinite(starsVal)||starsVal<1||starsVal>5){
-        return `<div class="card" style="margin-bottom:10px;"><div><strong>${K.esc(K.pname())}</strong> <span class="mut">(${K.esc(t.when||t.id)})</span></div><div class="mut" style="margin-top:4px;">لا توجد بيانات تقييم مسجّلة من الطرف الآخر.</div>${formHTML}</div>`;
+        return `<div class="card" style="margin-bottom:10px;"><div><strong>${K.esc(K.pname())}</strong> <span class="mut">(${K.esc(t.when||t.id)})</span></div><div class="mut" style="margin-top:4px;">${cloudOtherRated[t.id]?"تم استلام تقييم الطرف الآخر وتأكيد الكشف المتبادل ✓":"لا توجد بيانات تقييم مسجّلة من الطرف الآخر."}</div>${formHTML}</div>`;
       }
       return `<div class="card" style="margin-bottom:10px;"><div><strong>${K.esc(K.pname())}</strong> — <span style="color:#f59e0b;">${'★'.repeat(Math.round(starsVal))}</span></div>${commentTxt?`<p style="margin:4px 0;">"${K.esc(commentTxt)}"</p>`:""}${formHTML}</div>`;
     }).join("");

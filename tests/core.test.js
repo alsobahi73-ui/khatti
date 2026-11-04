@@ -75,3 +75,66 @@ test('completeLineTrips marks matching line upcoming bookings and trips as done 
  assert.ok(C.canRate(res.trips[0]));
  assert.deepEqual(C.reportTrips(res.trips,'l1',null).map(t=>t.id),['b1']);
 });
+
+test('pure helpers: atomic booking payload, rating reveal from myRating + otherFlag, session name derivation, absence path selection, and student parent_code resolution',()=>{
+ // 1. H4: buildAtomicBookingPayload builds RPC parameters and never accepts client user_id
+ const payload = C.buildAtomicBookingPayload({
+  id: 'ignored_client_id',
+  user_id: 'spoofed_uid',
+  userId: 'spoofed_uid_2',
+  lineId: 'l1',
+  passengerName: 'زينب علي',
+  phone: '07701234567',
+  plan: 'شهري كامل (5 أيام)',
+  seats: ['مقعد 1', 'مقعد 2'],
+  pickup: 'تقاطع الكرادة',
+  returnShift: '16:00',
+  payment: { method: 'zaincash', status: 'pending', ref: 'ZC-999' }
+ });
+ assert.deepEqual(payload, {
+  p_line_id: 'l1',
+  p_passenger_name: 'زينب علي',
+  p_phone: '07701234567',
+  p_plan_label: 'شهري كامل (5 أيام)',
+  p_seats: ['مقعد 1', 'مقعد 2'],
+  p_pickup: 'تقاطع الكرادة',
+  p_return_shift: '16:00',
+  p_pay_method: 'zaincash',
+  p_pay_status: 'pending',
+  p_pay_ref: 'ZC-999'
+ });
+ assert.equal('user_id' in payload, false);
+ assert.equal('p_user_id' in payload, false);
+
+ // 2. M2: resolveRatingReveal determines reveal strictly from (myRating exists + otherPartyFlag === true)
+ assert.equal(C.resolveRatingReveal(true, true), true);
+ assert.equal(C.resolveRatingReveal(true, false), false);
+ assert.equal(C.resolveRatingReveal(false, true), false);
+ assert.equal(C.resolveRatingReveal({ stars: 5, comment: 'ممتاز' }, true), true);
+ assert.equal(C.resolveRatingReveal({ stars: 5 }, false), false);
+ assert.equal(C.resolveRatingReveal(null, true), false);
+
+ // 3. H5: passengerNameFromSession derives from user_metadata.name, user.name, or email prefix
+ assert.equal(C.passengerNameFromSession({
+  user: { id: 'u1', email: 'sara@khatti.iq', user_metadata: { name: 'سارة جاسم' } }
+ }, 'افتراضي'), 'سارة جاسم');
+ assert.equal(C.passengerNameFromSession({
+  user: { id: 'u2', email: 'mustafa.iq@khatti.iq', name: 'مصطفى كريم' }
+ }, 'افتراضي'), 'مصطفى كريم');
+ assert.equal(C.passengerNameFromSession({
+  user: { id: 'u3', email: 'ali.hussein@khatti.iq' }
+ }, 'افتراضي'), 'ali.hussein');
+ assert.equal(C.passengerNameFromSession(null, 'أحمد علي'), 'أحمد علي');
+
+ // 4. M3: selectAttendanceSyncAction chooses mark_absent for absent in cloud mode
+ assert.equal(C.selectAttendanceSyncAction('absent', true), 'mark_absent');
+ assert.equal(C.selectAttendanceSyncAction('waiting', true), 'push_attendance');
+ assert.equal(C.selectAttendanceSyncAction('boarded', true), 'push_attendance');
+ assert.equal(C.selectAttendanceSyncAction('absent', false), 'local');
+
+ // 5. M4: resolveStudentParentCode takes parent_code from student attendance/booking record, never driver phone
+ assert.equal(C.resolveStudentParentCode({ code: 'KH-9012' }, { phone: '07701112233' }, { code: 'KH-0001' }), 'KH-9012');
+ assert.equal(C.resolveStudentParentCode(null, { phone: '07705556677' }, { code: 'KH-0001' }), 'KH-6677');
+ assert.equal(C.resolveStudentParentCode(null, {}, { parentCode: 'KH-3341' }), 'KH-3341');
+ assert.equal(C.resolveStudentParentCode(null, null, null), 'KH-4829');
+});

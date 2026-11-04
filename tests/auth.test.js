@@ -278,3 +278,62 @@ test('recover/reset: builds recover payload with redirect_to, parses recovery ha
     globalThis.location = origLocation;
   }
 });
+
+test('L1 & H5: schedules silent refresh 60s before expiry, reschedules after refresh, and derives passenger name from session', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    const nowMs = 1700000000000;
+    const expSec = 1700000300; // 300s in future -> refresh delay should be (300 - 60) * 1000 = 240000ms
+    const delay = KhattiAuth.computeRefreshDelayMs({ access_token: 'tok', expires_at: expSec }, nowMs);
+    assert.equal(delay, 240000);
+
+    // Saving a valid session schedules the refresh timer and preserves user name
+    const futureExp1 = Math.floor(Date.now() / 1000) + 300;
+    const saved = KhattiAuth.saveSession({
+      access_token: 'tok_initial',
+      refresh_token: 'ref_initial',
+      expires_at: futureExp1,
+      user: { id: 'u10', email: 'noor.iq@khatti.iq', user_metadata: { name: 'نور الهدى', role: 'passenger' } }
+    });
+    assert.equal(saved.user.name, 'نور الهدى');
+    assert.equal(KhattiAuth.getPassengerName(saved), 'نور الهدى');
+    assert.ok(KhattiAuth._refreshTimer !== null);
+    assert.equal(KhattiAuth._refreshScheduledExp, futureExp1);
+
+    // Email prefix fallback when name metadata is absent
+    assert.equal(KhattiAuth.getPassengerName({
+      access_token: 'tok_2',
+      user: { id: 'u11', email: 'karar.ali@khatti.iq', role: 'passenger' }
+    }), 'karar.ali');
+
+    // Refreshing session reschedules timer for the new expires_at
+    const futureExp2 = Math.floor(Date.now() / 1000) + 1800;
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        access_token: 'tok_refreshed',
+        refresh_token: 'ref_next',
+        expires_at: futureExp2,
+        user: { id: 'u10', email: 'noor.iq@khatti.iq', user_metadata: { name: 'نور الهدى', role: 'passenger' } }
+      })
+    });
+    const refreshed = await KhattiAuth.refreshSession();
+    assert.ok(refreshed);
+    assert.equal(refreshed.access_token, 'tok_refreshed');
+    assert.ok(KhattiAuth._refreshTimer !== null);
+    assert.equal(KhattiAuth._refreshScheduledExp, futureExp2);
+
+    // Clearing session cancels the timer
+    KhattiAuth.clearSession();
+    assert.equal(KhattiAuth._refreshTimer, null);
+  } finally {
+    KhattiAuth.cancelRefreshTimer();
+    globalThis.fetch = origFetch;
+  }
+});

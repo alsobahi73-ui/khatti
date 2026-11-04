@@ -308,9 +308,11 @@ test('reserveSeats, loadLines _cloud tagging, and K.line cloud vs local seat ded
     globalThis.location = { pathname: '/passenger/search.html' };
     const { loadLines } = require('../assets/data-source');
     delete require.cache[require.resolve('../assets/app')];
-    const fs = require('node:fs');
-    const vm = require('node:vm');
-    vm.runInThisContext(fs.readFileSync(require.resolve('../assets/app'), 'utf8') + '\n;globalThis.K = K;');
+    if (!globalThis.K) {
+      const fs = require('node:fs');
+      const vm = require('node:vm');
+      vm.runInThisContext(fs.readFileSync(require.resolve('../assets/app'), 'utf8') + '\n;globalThis.K = K;');
+    }
 
     // Add a local upcoming booking of 2 seats on l1
     localStorage.setItem('khatti_demo_v1_bookings', JSON.stringify([
@@ -483,6 +485,140 @@ test('pushLine and deleteLine enforce session driver_id, choose PATCH vs POST, s
     globalThis.fetch = async () => ({ ok: false, status: 403 });
     assert.equal(await KhattiCloud.pushLine({ id: 'l_existing_42', from: 'الكرادة', to: 'الجادرية' }), false);
     assert.equal(await KhattiCloud.deleteLine('l_existing_42'), false);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('H1, H4, H5, M2, M3: getLinePhone, createBookingAtomic, K.pname session identity, rater_user_id & hasOtherRating, and markAbsent', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    // Unconfigured guards
+    assert.equal(await KhattiCloud.getLinePhone('l1'), null);
+    assert.equal(await KhattiCloud.createBookingAtomic({ lineId: 'l1', seats: ['مقعد 1'] }), null);
+    assert.equal(await KhattiCloud.hasOtherRating('t1', 'passenger'), false);
+    assert.equal(await KhattiCloud.markAbsent('l1', 'st_1', '2026-10-15'), false);
+
+    // Configure cloud + session
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+    localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+      access_token: 'pax_jwt_123',
+      refresh_token: 'pax_ref_123',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 'pax-uuid-55', email: 'zainab.iq@khatti.iq', role: 'passenger', name: 'زينب قاسم' }
+    }));
+
+    // 1. H1: getLinePhone calls /rest/v1/rpc/get_line_phone
+    const calls = [];
+    globalThis.fetch = async (url, opts) => {
+      calls.push({ url, body: opts.body ? JSON.parse(opts.body) : null });
+      return { ok: true, json: async () => '07701234567' };
+    };
+    assert.equal(await KhattiCloud.getLinePhone('l1'), '07701234567');
+    assert.equal(calls[0].url, 'https://test-proj.supabase.co/rest/v1/rpc/get_line_phone');
+    assert.deepEqual(calls[0].body, { p_line_id: 'l1' });
+
+    globalThis.fetch = async () => ({ ok: true, json: async () => null });
+    assert.equal(await KhattiCloud.getLinePhone('l2'), null);
+
+    // 2. H4: createBookingAtomic sends atomic RPC payload without user_id and returns booking id or null
+    let atomicCall = null;
+    globalThis.fetch = async (url, opts) => {
+      atomicCall = { url, body: JSON.parse(opts.body) };
+      return { ok: true, json: async () => 'bk_server_9001' };
+    };
+    const bkId = await KhattiCloud.createBookingAtomic({
+      lineId: 'l1',
+      user_id: 'attacker-uid',
+      passengerName: 'زينب قاسم',
+      phone: '07701112233',
+      plan: 'دوام كامل',
+      seats: ['مقعد 1', 'مقعد 2'],
+      pickup: 'الكرادة',
+      returnShift: '14:30',
+      payment: { method: 'zaincash', status: 'pending', ref: 'REF-77' }
+    });
+    assert.equal(bkId, 'bk_server_9001');
+    assert.equal(atomicCall.url, 'https://test-proj.supabase.co/rest/v1/rpc/create_booking_atomic');
+    assert.deepEqual(atomicCall.body, {
+      p_line_id: 'l1',
+      p_passenger_name: 'زينب قاسم',
+      p_phone: '07701112233',
+      p_plan_label: 'دوام كامل',
+      p_seats: ['مقعد 1', 'مقعد 2'],
+      p_pickup: 'الكرادة',
+      p_return_shift: '14:30',
+      p_pay_method: 'zaincash',
+      p_pay_status: 'pending',
+      p_pay_ref: 'REF-77'
+    });
+
+    globalThis.fetch = async () => ({ ok: true, json: async () => null });
+    assert.equal(await KhattiCloud.createBookingAtomic({ lineId: 'l1', seats: ['مقعد 1'] }), null);
+
+    // 3. M2: pushRating sets rater_user_id from session; hasOtherRating calls /rest/v1/rpc/has_other_rating
+    let ratingBody = null;
+    globalThis.fetch = async (_url, opts) => {
+      ratingBody = JSON.parse(opts.body);
+      return { ok: true };
+    };
+    assert.equal(await KhattiCloud.pushRating({ tripId: 't99', lineId: 'l1', role: 'passenger', stars: 5, comment: 'رائع' }), true);
+    assert.equal(ratingBody.rater_user_id, 'pax-uuid-55');
+
+    let otherCall = null;
+    globalThis.fetch = async (url, opts) => {
+      otherCall = { url, body: JSON.parse(opts.body) };
+      return { ok: true, json: async () => true };
+    };
+    assert.equal(await KhattiCloud.hasOtherRating('t99', 'passenger'), true);
+    assert.equal(otherCall.url, 'https://test-proj.supabase.co/rest/v1/rpc/has_other_rating');
+    assert.deepEqual(otherCall.body, { p_trip_id: 't99', p_role: 'passenger' });
+
+    // 4. M3: markAbsent calls /rest/v1/rpc/mark_absent
+    let absentCall = null;
+    globalThis.fetch = async (url, opts) => {
+      absentCall = { url, body: JSON.parse(opts.body) };
+      return { ok: true, json: async () => true };
+    };
+    assert.equal(await KhattiCloud.markAbsent('l1', 'st_1', '2026-10-15'), true);
+    assert.equal(absentCall.url, 'https://test-proj.supabase.co/rest/v1/rpc/mark_absent');
+    assert.deepEqual(absentCall.body, { p_line_id: 'l1', p_student_id: 'st_1', p_trip_date: '2026-10-15' });
+
+    // 5. H5: K.pname() derives passenger name from KhattiAuth session when cloud-configured, and uses local me when unconfigured
+    globalThis.KhattiCore = require('../assets/core');
+    globalThis.KhattiAuth = require('../assets/auth');
+    globalThis.document = {
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => {}
+    };
+    globalThis.location = { pathname: '/passenger/booking.html' };
+    if (!globalThis.K) {
+      const fs = require('node:fs');
+      const vm = require('node:vm');
+      vm.runInThisContext(fs.readFileSync(require.resolve('../assets/app'), 'utf8') + '\n;globalThis.K = K;');
+    }
+
+    localStorage.setItem('khatti_demo_v1_me', JSON.stringify({ name: 'أحمد علي المحلي', phone: '07701112233' }));
+    assert.equal(globalThis.K.pname(), 'زينب قاسم');
+
+    // When session has only email without name -> uses email prefix
+    localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+      access_token: 'pax_jwt_123',
+      refresh_token: 'pax_ref_123',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 'pax-uuid-55', email: 'huda.student@khatti.iq', role: 'passenger' }
+    }));
+    assert.equal(globalThis.K.pname(), 'huda.student');
+
+    // When cloud is unconfigured -> falls back to local me.name
+    localStorage.removeItem('khatti_supabase_config_v1');
+    assert.equal(globalThis.K.pname(), 'أحمد علي المحلي');
+    globalThis.KhattiAuth.cancelRefreshTimer();
   } finally {
     globalThis.fetch = origFetch;
   }

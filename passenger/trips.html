@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>اشتراكاتي ورحلاتي — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/auth.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
@@ -10,8 +10,14 @@
   const cloud=window.KhattiCloud;
   const isCloud=()=>Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
   function syncAtt(student,lineId){
-    if(!isCloud()||typeof cloud.pushAttendance!=="function")return;
-    cloud.pushAttendance(student,lineId||"l1",KhattiCore.today()).then(ok=>{
+    if(!isCloud()||!student)return;
+    const targetLine=lineId||"l1";
+    const tripDate=KhattiCore.today();
+    const action=KhattiCore.selectAttendanceSyncAction(student.status,true);
+    const req=(action==="mark_absent"&&typeof cloud.markAbsent==="function")
+      ?cloud.markAbsent(targetLine,student.id||"st_1",tripDate)
+      :(typeof cloud.pushAttendance==="function"?cloud.pushAttendance(student,targetLine,tripDate):Promise.resolve(false));
+    Promise.resolve(req).then(ok=>{
       if(!ok)K.toast("تعذّر مزامنة الحضور سحابيًا؛ تم الحفظ محليًا");
     }).catch(()=>K.toast("تعذّر مزامنة الحضور سحابيًا؛ تم الحفظ محليًا"));
   }
