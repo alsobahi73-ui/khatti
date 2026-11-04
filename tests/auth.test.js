@@ -187,3 +187,94 @@ test('stripLinePhone and fetchLines remove phone for non-owners and keep it only
     globalThis.fetch = origFetch;
   }
 });
+
+test('recover/reset: builds recover payload with redirect_to, parses recovery hash into session, and sends PUT /auth/v1/user with Bearer token', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  const origLocation = globalThis.location;
+  try {
+    globalThis.location = {
+      origin: 'https://khatti.example.iq',
+      pathname: '/auth.html',
+      hash: ''
+    };
+
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    // 1. buildRecoverPayload builds { email, redirect_to } using current origin + /auth.html by default
+    const payloadDefault = KhattiAuth.buildRecoverPayload('  user@khatti.iq  ');
+    assert.deepEqual(payloadDefault, {
+      email: 'user@khatti.iq',
+      redirect_to: 'https://khatti.example.iq/auth.html'
+    });
+
+    const payloadCustom = KhattiAuth.buildRecoverPayload('driver@khatti.iq', 'https://custom.domain/auth.html');
+    assert.deepEqual(payloadCustom, {
+      email: 'driver@khatti.iq',
+      redirect_to: 'https://custom.domain/auth.html'
+    });
+
+    // 2. recoverPassword sends POST to {url}/auth/v1/recover with payload
+    let recoverReq = null;
+    globalThis.fetch = async (url, opts) => {
+      recoverReq = { url, opts, body: JSON.parse(opts.body) };
+      return { ok: true, json: async () => ({}) };
+    };
+    const recRes = await KhattiAuth.recoverPassword('user@khatti.iq');
+    assert.equal(recRes.ok, true);
+    assert.equal(recoverReq.url, 'https://test-proj.supabase.co/auth/v1/recover');
+    assert.equal(recoverReq.opts.method, 'POST');
+    assert.equal(recoverReq.opts.headers.apikey, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key');
+    assert.deepEqual(recoverReq.body, {
+      email: 'user@khatti.iq',
+      redirect_to: 'https://khatti.example.iq/auth.html'
+    });
+
+    // 3. parseRecoveryHash ignores non-recovery hashes and parses valid recovery hash while saving session
+    assert.equal(KhattiAuth.parseRecoveryHash(''), null);
+    assert.equal(KhattiAuth.parseRecoveryHash('#access_token=abc&type=signup'), null);
+    assert.equal(KhattiAuth.parseRecoveryHash('#type=recovery'), null);
+
+    const parsed = KhattiAuth.parseRecoveryHash('#access_token=rec_jwt_999&refresh_token=rec_ref_888&expires_in=3600&type=recovery');
+    assert.ok(parsed);
+    assert.equal(parsed.type, 'recovery');
+    assert.equal(parsed.access_token, 'rec_jwt_999');
+    assert.equal(parsed.refresh_token, 'rec_ref_888');
+    const storedSess = KhattiAuth.readStoredSession();
+    assert.ok(storedSess);
+    assert.equal(storedSess.access_token, 'rec_jwt_999');
+    assert.equal(storedSess.refresh_token, 'rec_ref_888');
+
+    // 4. resetPassword sends PUT to {url}/auth/v1/user with Bearer token and updates password
+    let resetReq = null;
+    globalThis.fetch = async (url, opts) => {
+      resetReq = { url, opts, body: JSON.parse(opts.body) };
+      return {
+        ok: true,
+        json: async () => ({
+          id: 'u-rec-1',
+          email: 'driver@khatti.iq',
+          user_metadata: { role: 'driver' }
+        })
+      };
+    };
+
+    const weakRes = await KhattiAuth.resetPassword('123');
+    assert.equal(weakRes.ok, false);
+    assert.match(weakRes.error, /كلمة مرور ضعيفة/);
+
+    const resetRes = await KhattiAuth.resetPassword('newStrongPass123');
+    assert.equal(resetRes.ok, true);
+    assert.equal(resetReq.url, 'https://test-proj.supabase.co/auth/v1/user');
+    assert.equal(resetReq.opts.method, 'PUT');
+    assert.equal(resetReq.opts.headers.Authorization, 'Bearer rec_jwt_999');
+    assert.deepEqual(resetReq.body, { password: 'newStrongPass123' });
+    assert.equal(resetRes.user.role, 'driver');
+  } finally {
+    globalThis.fetch = origFetch;
+    globalThis.location = origLocation;
+  }
+});

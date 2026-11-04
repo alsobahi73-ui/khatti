@@ -9,6 +9,18 @@
   let tab=qs.get("tab")==="signup"?"signup":"signin";
   let role=qs.get("role")==="driver"?"driver":"passenger";
   let alertMsg="",alertType="note";
+  let recoveryInfo=null;
+
+  /* تنبيه: يجب إضافة رابط العرض (location.origin + /auth.html) إلى Redirect URLs في لوحة Supabase حتى يعمل استرجاع كلمة المرور */
+  if(window.KhattiAuth&&typeof KhattiAuth.parseRecoveryHash==="function"&&location.hash){
+    recoveryInfo=KhattiAuth.parseRecoveryHash(location.hash);
+    if(recoveryInfo){
+      tab="reset";
+      alertType="ok";
+      alertMsg="تم التحقق من رابط الاستعادة؛ أدخل كلمة المرور الجديدة أدناه";
+      try{if(history&&typeof history.replaceState==="function")history.replaceState(null,"",location.pathname+location.search);}catch(_){}
+    }
+  }
 
   function roleTarget(r){
     return r==="driver"?"driver/index.html":"passenger/search.html";
@@ -17,6 +29,46 @@
   function render(){
     const sess=window.KhattiAuth?KhattiAuth.readStoredSession():null;
     const validSess=sess&&window.KhattiAuth&&KhattiAuth.isSessionValid(sess)?sess:null;
+
+    if(tab==="reset"){
+      app.innerHTML=`
+        <div class="card">
+          <h3>🔑 تعيين كلمة مرور جديدة</h3>
+          <div id="auth-alert" role="alert" aria-live="polite" style="display:${alertMsg?"block":"none"};margin-bottom:12px;" class="${alertType==="ok"?"ok-note":"danger-note"}">${K.esc(alertMsg)}</div>
+          <form id="auth-form" novalidate>
+            <div class="field">
+              <label for="auth-password">كلمة المرور الجديدة (6 أحرف على الأقل)</label>
+              <input id="auth-password" type="password" dir="ltr" autocomplete="new-password" placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn btn-a" id="auth-submit" style="width:100%;margin-top:10px;">حفظ كلمة المرور الجديدة ✓</button>
+          </form>
+        </div>
+      `;
+      $("#auth-form").onsubmit=async e=>{
+        e.preventDefault();
+        alertMsg="";
+        const pwd=$("#auth-password")?.value||"";
+        const submitBtn=$("#auth-submit");
+        if(!pwd||pwd.length<6){
+          alertType="err";
+          alertMsg=KhattiAuth.translateError("weak_password");
+          render();
+          return;
+        }
+        if(submitBtn)submitBtn.disabled=true;
+        const res=await KhattiAuth.resetPassword(pwd,recoveryInfo?recoveryInfo.access_token:"");
+        if(submitBtn)submitBtn.disabled=false;
+        if(!res.ok){
+          alertType="err";
+          alertMsg=res.error||KhattiAuth.translateError("error");
+          render();
+          return;
+        }
+        const finalRole=res.user?.role||res.session?.user?.role||role;
+        location.href=roleTarget(finalRole);
+      };
+      return;
+    }
 
     app.innerHTML=`
       ${validSess?`
@@ -70,6 +122,12 @@
             <input id="auth-password" type="password" dir="ltr" autocomplete="${tab==="signin"?"current-password":"new-password"}" placeholder="••••••••">
           </div>
 
+          ${tab==="signin"?`
+            <div style="margin:6px 0 10px;text-align:left;">
+              <a href="#recover" id="forgot-password-link" style="font-size:13px;color:#123a5c;font-weight:700;text-decoration:underline;">نسيت كلمة المرور؟</a>
+            </div>
+          `:""}
+
           <button type="submit" class="btn btn-a" id="auth-submit" style="width:100%;margin-top:10px;">
             ${tab==="signin"?"دخول ←":"إنشاء حساب جديد ✓"}
           </button>
@@ -81,6 +139,33 @@
     $("#tab-signup").onclick=()=>{tab="signup";alertMsg="";render();};
     $("#role-passenger").onclick=()=>{role="passenger";render();};
     $("#role-driver").onclick=()=>{role="driver";render();};
+
+    const forgotLink=$("#forgot-password-link");
+    if(forgotLink){
+      forgotLink.onclick=async e=>{
+        e.preventDefault();
+        alertMsg="";
+        const email=($("#auth-email")?.value||"").trim();
+        if(!email||!email.includes("@")){
+          alertType="err";
+          alertMsg="يرجى إدخال بريدك الإلكتروني أولًا لإرسال رابط استعادة كلمة المرور";
+          render();
+          return;
+        }
+        /* تنبيه: يجب إضافة رابط العرض (location.origin + /auth.html) إلى Redirect URLs في لوحة Supabase حتى يعمل */
+        const redirectTo=location.origin+"/auth.html";
+        const res=await KhattiAuth.recoverPassword(email,redirectTo);
+        if(!res.ok){
+          alertType="err";
+          alertMsg=res.error||KhattiAuth.translateError("error");
+          render();
+          return;
+        }
+        alertType="ok";
+        alertMsg="تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني؛ تفقد صندوق الوارد";
+        render();
+      };
+    }
 
     const signoutBtn=$("#btn-signout");
     if(signoutBtn){

@@ -1,7 +1,14 @@
 name: Prototype checks
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   test:
     runs-on: ubuntu-latest
