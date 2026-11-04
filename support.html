@@ -11,10 +11,20 @@
 <div class="note" id="sok" style="display:none">حُفظت الرسالة محليًا للتجربة فقط؛ لم تُرسل إلى فريق دعم.</div>
 <div class="note">عرض تجريبي؛ لا توجد قناة دعم مرتبطة بهذه الصفحة حاليًا.</div>
 </div>
+<div class="card">
+<h3>🛠️ تقارير الأخطاء التقنية</h3>
+<button type="button" class="btn btn-a" id="btn-report-issue">الإبلاغ عن مشكلة</button>
+<div id="error-report-box" style="display:none;margin-top:10px;">
+  <div class="field"><label for="err-report-msg">وصف المشكلة</label><input id="err-report-msg" type="text" maxlength="500" placeholder="اشرح المشكلة باختصار"></div>
+  <div class="field"><label for="err-report-details">تفاصيل الخطأ (اختياري)</label><textarea id="err-report-details" rows="3" placeholder="تفاصيل إضافية أو تقنية"></textarea></div>
+  <button type="button" class="btn btn-p" id="err-report-submit">إرسال التقرير</button>
+  <div class="note" id="err-report-status" style="display:none;margin-top:8px;"></div>
+</div>
+</div>
 <a class="btn btn-g" href="index.html">→ رجوع للرئيسية</a>
 </main><footer class="app">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
 </div>
-<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/app.js"></script>
+<script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/auth.js"></script><script src="assets/cloud.js"></script><script src="assets/app.js"></script>
 <script>
 const FAQ=[["كيف أحجز مقعدًا؟","من واجهة الراكب ← ابحث عن خط ← اختر الخط ← احجز (يومي، أسبوعي، دفتر 10 رحلات، شهري، أو شهري بخصم طلاب)."],["كيف أدفع؟","خيارات الدفع معروضة للتجربة فقط؛ لا توجد خدمة دفع مرتبطة حاليًا."],["كيف يتابعني أهلي؟","بوابة الأهل الحالية محاكاة على الجهاز نفسه؛ لا يوجد ربط موثق أو مشاركة فعلية بين الهواتف."],["كيف أبلّغ عن مخالفة؟","يمكن حفظ بلاغ تجريبي محلي عن رحلة تجريبية مكتملة؛ لا يُرسل إلى مراجعين."],["أنا سائق، كيف أسجّل خطي؟","التسجيل والتوثيق والنشر حاليًا محاكاة محلية؛ لا توجد مراجعة وثائق بشرية مرتبطة بالتطبيق."]];
 document.getElementById("faq").innerHTML=FAQ.map((f,i)=>`<div class="card" style="margin:8px 0;padding:10px"><b style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display=='none'?'block':'none'">▸ ${f[0]}</b><div style="display:none;margin-top:6px;font-size:14px">${f[1]}</div></div>`).join("");

@@ -760,3 +760,119 @@ test('Slice 3 cloud methods: pushChatMessage/pullChatMessages, pushNotifyRequest
     globalThis.fetch = origFetch;
   }
 });
+
+test('Slice 4 cloud methods: pushSubscription, pullMySubscriptions, and reportError silent failure handling', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    // 1. Unconfigured guards (reportError must return false silently without throwing)
+    assert.equal(await KhattiCloud.pushSubscription({ plan_label: 'اشتراك سائق شهري', months: 1, pay_method: 'cash' }), false);
+    assert.deepEqual(await KhattiCloud.pullMySubscriptions(), []);
+    assert.equal(await KhattiCloud.reportError('/driver/index.html', 'خطأ تجريبي', 'تفاصيل'), false);
+
+    // Configure cloud + driver session
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+    localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+      access_token: 'drv_jwt_444',
+      refresh_token: 'drv_ref_444',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 'uid-driver-444', email: 'driver4@khatti.iq', role: 'driver', name: 'أبو محمد' }
+    }));
+
+    // 2. pushSubscription validates pay_method, forces session driver_id & pending status, preserves manual/blank amount
+    const subReqs = [];
+    globalThis.fetch = async (url, opts) => {
+      subReqs.push({ url, opts, body: opts && opts.body ? JSON.parse(opts.body) : null });
+      return {
+        ok: true,
+        json: async () => ([
+          {
+            id: 'sub_101',
+            driver_id: 'uid-driver-444',
+            plan_label: 'اشتراك سائق شهري',
+            months: 2,
+            amount: null,
+            pay_method: 'zain',
+            pay_ref: 'ZN-500',
+            status: 'pending',
+            starts_at: null,
+            ends_at: null,
+            created_at: '2026-11-04T08:00:00Z'
+          }
+        ])
+      };
+    };
+
+    // Rejects invalid pay_method without calling fetch
+    assert.equal(await KhattiCloud.pushSubscription({
+      plan_label: 'اشتراك سائق شهري',
+      months: 1,
+      pay_method: 'zaincash'
+    }), false);
+    assert.equal(subReqs.length, 0);
+
+    // Accepts valid subscription with blank amount (remains null, no automatic fee calculation)
+    const pushedSub = await KhattiCloud.pushSubscription({
+      driver_id: 'spoofed-other-driver',
+      plan_label: 'اشتراك سائق شهري',
+      months: 2,
+      amount: '',
+      pay_method: 'zain',
+      pay_ref: 'ZN-500',
+      status: 'confirmed'
+    });
+    assert.equal(pushedSub, true);
+    assert.equal(subReqs.length, 1);
+    assert.equal(subReqs[0].url, 'https://test-proj.supabase.co/rest/v1/khatti_driver_subscriptions');
+    assert.equal(subReqs[0].opts.method, 'POST');
+    assert.equal(subReqs[0].body.driver_id, 'uid-driver-444');
+    assert.equal(subReqs[0].body.plan_label, 'اشتراك سائق شهري');
+    assert.equal(subReqs[0].body.months, 2);
+    assert.equal(subReqs[0].body.amount, null);
+    assert.equal(subReqs[0].body.pay_method, 'zain');
+    assert.equal(subReqs[0].body.pay_ref, 'ZN-500');
+    assert.equal(subReqs[0].body.status, 'pending');
+
+    // pullMySubscriptions queries driver_id and orders by created_at.desc
+    const pulledSubs = await KhattiCloud.pullMySubscriptions();
+    assert.equal(subReqs[1].url, 'https://test-proj.supabase.co/rest/v1/khatti_driver_subscriptions?driver_id=eq.uid-driver-444&order=created_at.desc&select=*');
+    assert.equal(pulledSubs.length, 1);
+    assert.equal(pulledSubs[0].id, 'sub_101');
+    assert.equal(pulledSubs[0].status, 'pending');
+    assert.equal(pulledSubs[0].amount, null);
+
+    // 3. reportError inserts into khatti_error_reports when configured and silently ignores network/HTTP failures
+    const errReqs = [];
+    globalThis.fetch = async (url, opts) => {
+      errReqs.push({ url, opts, body: opts && opts.body ? JSON.parse(opts.body) : null });
+      return { ok: true };
+    };
+    const repOk = await KhattiCloud.reportError('/driver/index.html', 'تعذّر جلب الاشتراكات', 'Timeout after 10000ms');
+    assert.equal(repOk, true);
+    assert.equal(errReqs.length, 1);
+    assert.equal(errReqs[0].url, 'https://test-proj.supabase.co/rest/v1/khatti_error_reports');
+    assert.equal(errReqs[0].body.user_id, 'uid-driver-444');
+    assert.equal(errReqs[0].body.page, '/driver/index.html');
+    assert.equal(errReqs[0].body.message, 'تعذّر جلب الاشتراكات');
+    assert.equal(errReqs[0].body.details, 'Timeout after 10000ms');
+
+    // Network failure / thrown exception inside fetch -> resolves to false without throwing
+    globalThis.fetch = async () => { throw new Error('Network unreachable'); };
+    await assert.doesNotReject(async () => {
+      const res = await KhattiCloud.reportError('/index.html', 'فشل اتصال', new Error('Socket closed'));
+      assert.equal(res, false);
+    });
+
+    // HTTP 500 or 401 failure -> resolves to false silently without throwing
+    globalThis.fetch = async () => ({ ok: false, status: 500 });
+    await assert.doesNotReject(async () => {
+      const res = await KhattiCloud.reportError('/support.html', 'خطأ خادم', 'HTTP 500');
+      assert.equal(res, false);
+    });
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});

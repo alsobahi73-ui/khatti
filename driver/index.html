@@ -10,6 +10,7 @@
   let reviewBannerVisible=false;
   let myLines=[];
   let notifyReqs=K.get("lineNotifyReqs",[]);
+  let mySubscriptions=K.get("driverSubscriptions",[]);
 
   function render(){
     const att=K.attendance(l.id);
@@ -21,6 +22,16 @@
     const occ=Math.max(0,l.seats-l.free);
     const demandLines=myLines.length>0?myLines:[l];
     const demandCounts=KhattiCore.countLineNotifyRequests(demandLines,notifyReqs);
+    const latestSub=(Array.isArray(mySubscriptions)&&mySubscriptions.length>0)?mySubscriptions[0]:null;
+    const subStatusLabel=!latestSub
+      ?"⚪ غير مشترك بعد"
+      :(latestSub.status==="confirmed"
+        ?"🟢 مؤكّد (فعّال)"
+        :(latestSub.status==="rejected"?"🔴 مرفوض":"⏳ قيد المراجعة اليدوية (pending)"));
+    const subEndsAtLabel=(latestSub&&latestSub.ends_at)
+      ?String(latestSub.ends_at).slice(0,10)
+      :"غير محدد (يُحدَّد بعد تأكيد الإدارة)";
+    const payMethodNames={cash:"كاش",zain:"زين كاش",asia:"آسيا حوالة"};
 
     $("#app").innerHTML=`
       ${reviewBannerVisible?`
@@ -68,6 +79,54 @@
             <span class="badge b-m">${dc.count} طلب</span>
           </div>
         `).join("")}
+      </div>
+
+      <div class="card" id="my-subscription-card">
+        <h3>💳 اشتراكي</h3>
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+          <span>الحالة: <b id="sub-status-text">${subStatusLabel}</b></span>
+          <span class="grow"></span>
+          <span>تاريخ الانتهاء: <b id="sub-ends-at">${K.esc(subEndsAtLabel)}</b></span>
+        </div>
+        ${latestSub?`
+          <div class="mut" id="sub-latest-summary" style="margin-bottom:6px;font-size:13px;">
+            آخر طلب: <b>${K.esc(latestSub.plan_label||"اشتراك سائق شهري")}</b> • المدة: ${Number(latestSub.months)||1} شهر • الدفع: ${K.esc(payMethodNames[latestSub.pay_method]||latestSub.pay_method||"كاش")}${latestSub.amount!==null&&latestSub.amount!==undefined&&latestSub.amount!==""?` • المبلغ المصرّح: ${K.fmt(latestSub.amount)}`:""}${latestSub.pay_ref?` • المرجع: ${K.esc(latestSub.pay_ref)}`:""}
+          </div>
+        `:""}
+        <div class="mut" style="font-size:12px;margin-bottom:10px;">تأكيد الاشتراك وتغيير حالته يُترك للإدارة عبر لوحة التحكم فقط، دون أي حساب آلي للرسوم.</div>
+        <div class="field">
+          <label for="sub-plan">الخطة</label>
+          <select id="sub-plan">
+            <option value="اشتراك سائق شهري">اشتراك سائق شهري</option>
+            <option value="اشتراك سائق فصلي">اشتراك سائق فصلي</option>
+            <option value="اشتراك سائق سنوي">اشتراك سائق سنوي</option>
+          </select>
+        </div>
+        <div class="row" style="gap:8px;flex-wrap:wrap;">
+          <div class="field grow">
+            <label for="sub-months">عدد الأشهر</label>
+            <input id="sub-months" type="number" min="1" max="36" value="1">
+          </div>
+          <div class="field grow">
+            <label for="sub-amount">مبلغ الخطة من الفاتورة/الإشعار (اختياري)</label>
+            <input id="sub-amount" type="number" min="0" placeholder="يُملأ يدوياً أو يُترك فارغاً">
+          </div>
+        </div>
+        <div class="row" style="gap:8px;flex-wrap:wrap;">
+          <div class="field grow">
+            <label for="sub-pay-method">طريقة الدفع اليدوية</label>
+            <select id="sub-pay-method">
+              <option value="cash">كاش</option>
+              <option value="zain">زين كاش</option>
+              <option value="asia">آسيا حوالة</option>
+            </select>
+          </div>
+          <div class="field grow">
+            <label for="sub-pay-ref">مرجع الدفع (اختياري)</label>
+            <input id="sub-pay-ref" type="text" maxlength="100" placeholder="رقم العملية أو الوصل">
+          </div>
+        </div>
+        <button type="button" class="btn btn-p" id="sub-submit-btn">تجديد / إرسال طلب اشتراك</button>
       </div>
 
       <div class="card">
@@ -133,6 +192,60 @@
       sdEl.textContent=d;
       K.toast("حُفظ تاريخ اختيار الصورة محليًا؛ لم يُجرَ تحقق من الهوية");
     };
+    const subBtn=document.getElementById("sub-submit-btn");
+    if(subBtn)subBtn.onclick=async()=>{
+      const planVal=(document.getElementById("sub-plan")?.value||"اشتراك سائق شهري").trim();
+      const monthsVal=(document.getElementById("sub-months")?.value||"").trim();
+      const amountVal=(document.getElementById("sub-amount")?.value||"").trim();
+      const methodVal=(document.getElementById("sub-pay-method")?.value||"cash").trim();
+      const refVal=(document.getElementById("sub-pay-ref")?.value||"").trim();
+      if(!KhattiCore.integer(monthsVal,1,36)){
+        K.toast("يرجى إدخال عدد أشهر صحيح (1 إلى 36)");
+        return;
+      }
+      if(amountVal!==""&&!KhattiCore.integer(amountVal,0,100000000)){
+        K.toast("يرجى إدخال مبلغ صحيح أو ترك الحقل فارغًا");
+        return;
+      }
+      if(!KhattiCore.isValidSubscriptionPayMethod(methodVal)){
+        K.toast("طريقة الدفع غير صالحة");
+        return;
+      }
+      const sess=K._session();
+      const driverId=String(sess?.user?.id||"local_driver").trim();
+      const built=KhattiCore.buildSubscriptionPayload({
+        plan_label:planVal,
+        months:Number(monthsVal),
+        amount:amountVal===""?null:Number(amountVal),
+        pay_method:methodVal,
+        pay_ref:refVal
+      },driverId);
+      if(!built){
+        K.toast("تعذّر إعداد طلب الاشتراك");
+        return;
+      }
+      const entry={...built,created_at:new Date().toISOString()};
+      mySubscriptions=[entry,...(Array.isArray(mySubscriptions)?mySubscriptions:[])];
+      try{K.set("driverSubscriptions",mySubscriptions);}catch(e){return;}
+      const cloud=window.KhattiCloud;
+      if(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured()&&typeof cloud.pushSubscription==="function"){
+        try{
+          const ok=await cloud.pushSubscription(entry);
+          if(ok){
+            K.toast("تم إرسال طلب تجديد الاشتراك بحالة قيد المراجعة (pending)");
+          }else{
+            K.toast("حُفظ طلب الاشتراك محلياً؛ تعذّرت المزامنة السحابية");
+            if(typeof K.handleCloudSyncError==="function")K.handleCloudSyncError("تعذّر مزامنة طلب اشتراك السائق سحابياً","pushSubscription returned false");
+          }
+        }catch(err){
+          K.toast("حُفظ طلب الاشتراك محلياً؛ تعذّرت المزامنة السحابية");
+          if(typeof K.handleCloudSyncError==="function")K.handleCloudSyncError("خطأ أثناء مزامنة اشتراك السائق",err);
+        }
+      }else{
+        K.toast("حُفظ طلب الاشتراك محلياً بحالة قيد المراجعة (pending)");
+      }
+      render();
+    };
   }
 
   window.updSt=function(studentId,status){
@@ -148,6 +261,16 @@
     if(!cloud||typeof cloud.isConfigured!=="function"||!cloud.isConfigured())return;
     const sess=auth&&typeof auth.readStoredSession==="function"?auth.readStoredSession():null;
     if(!sess||!sess.user||!sess.user.id)return;
+    if(typeof cloud.pullMySubscriptions==="function"){
+      try{
+        const remoteSubs=await cloud.pullMySubscriptions(sess.user.id);
+        if(Array.isArray(remoteSubs)&&remoteSubs.length>0){
+          mySubscriptions=remoteSubs;
+          try{K.set("driverSubscriptions",remoteSubs);}catch(_){}
+          render();
+        }
+      }catch(_){}
+    }
     if(typeof cloud.fetchLines==="function"){
       try{
         const allLines=await cloud.fetchLines();

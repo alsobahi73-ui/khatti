@@ -30,6 +30,20 @@
     <div class="mut" id="cloud-status" role="status" aria-live="polite" style="margin-top:8px;"></div>
   </div>
 </details>
+
+<div class="card" id="error-report-section" style="margin-top:14px;">
+  <div class="row" style="gap:8px;flex-wrap:wrap;">
+    <span>واجهت عطلاً أو مشكلة تقنية؟</span>
+    <span class="grow"></span>
+    <button type="button" class="btn btn-a" id="btn-report-issue" style="width:auto;margin-top:0;">🛠️ الإبلاغ عن مشكلة</button>
+  </div>
+  <div id="error-report-box" style="display:none;margin-top:10px;">
+    <div class="field"><label for="err-report-msg">وصف المشكلة</label><input id="err-report-msg" type="text" maxlength="500" placeholder="اشرح المشكلة باختصار"></div>
+    <div class="field"><label for="err-report-details">تفاصيل الخطأ (اختياري)</label><textarea id="err-report-details" rows="3" placeholder="تفاصيل إضافية أو تقنية"></textarea></div>
+    <button type="button" class="btn btn-p" id="err-report-submit">إرسال التقرير</button>
+    <div class="note" id="err-report-status" style="display:none;margin-top:8px;"></div>
+  </div>
+</div>
 </main></div>
 <script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/auth.js"></script><script src="assets/cloud.js"></script><script src="assets/app.js"></script>
 <script>

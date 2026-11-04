@@ -425,9 +425,142 @@ document.addEventListener("DOMContentLoaded",()=>{
     const swPath=location.pathname.includes("/driver/")||location.pathname.includes("/passenger/")||location.pathname.includes("/parent/")?"../sw.js":"sw.js";
     navigator.serviceWorker.register(swPath).catch(()=>{});
   }
+  const repBtn=document.getElementById("btn-report-issue");
+  if(repBtn){
+    repBtn.addEventListener("click",()=>{
+      const box=document.getElementById("error-report-box");
+      if(box&&box.style.display==="block"){
+        box.style.display="none";
+      }else{
+        K.openErrorReportForm();
+      }
+    });
+  }
+  K._bindErrorReportForm();
 });
+
+K.submitErrorReport=async function(message,details="",page=""){
+  const cleanMsg=String(message??"").trim();
+  if(!cleanMsg)return false;
+  const uid=String(this._session()?.user?.id||"").trim();
+  const curPage=String(page||(typeof location!=="undefined"&&location?location.pathname:"/")||"/").trim();
+  const payload=(typeof KhattiCore!=="undefined"&&KhattiCore&&typeof KhattiCore.formatErrorReport==="function")
+    ?KhattiCore.formatErrorReport(curPage,cleanMsg,details,uid)
+    :{id:"er_"+Date.now(),user_id:uid||null,page:curPage,message:cleanMsg.slice(0,500),details:String(details??"").slice(0,4000)};
+  if(!payload)return false;
+  try{
+    const list=this.get("error_reports",[]);
+    list.unshift({...payload,created_at:new Date().toISOString()});
+    this.set("error_reports",list);
+  }catch(_){}
+  if(this._isCloud()&&typeof KhattiCloud!=="undefined"&&KhattiCloud&&typeof KhattiCloud.reportError==="function"){
+    try{
+      await KhattiCloud.reportError(payload.page,payload.message,payload.details);
+    }catch(_){}
+  }
+  return true;
+};
+
+K._bindErrorReportForm=function(){
+  const subBtn=document.getElementById("err-report-submit");
+  if(!subBtn||subBtn.dataset.bound==="1")return;
+  subBtn.dataset.bound="1";
+  subBtn.addEventListener("click",async()=>{
+    const msgEl=document.getElementById("err-report-msg");
+    const detEl=document.getElementById("err-report-details");
+    const stEl=document.getElementById("err-report-status");
+    const msg=msgEl?msgEl.value.trim():"";
+    const det=detEl?detEl.value.trim():"";
+    if(!msg){
+      this.toast("يرجى كتابة وصف المشكلة أولاً");
+      return;
+    }
+    await this.submitErrorReport(msg,det);
+    if(msgEl)msgEl.value="";
+    if(detEl)detEl.value="";
+    const noteText=this._isCloud()
+      ?"تم حفظ وإرسال تقرير المشكلة؛ شكرًا لمساهمتك في تحسين المنصة."
+      :"حُفظ تقرير المشكلة محليًا (الربط السحابي غير مفعّل).";
+    if(stEl){
+      stEl.textContent=noteText;
+      stEl.style.display="block";
+    }
+    this.toast(noteText);
+  });
+};
+
+K.openErrorReportForm=function(prefillMessage="",prefillDetails=""){
+  let box=document.getElementById("error-report-box");
+  if(!box){
+    const host=document.querySelector("#app")||document.querySelector("main")||document.body;
+    if(!host)return;
+    box=document.createElement("div");
+    box.className="card";
+    box.id="error-report-box";
+    box.style.marginTop="10px";
+    box.style.border="1.5px solid #f59e0b";
+    box.innerHTML=`
+      <h3>🛠️ الإبلاغ عن مشكلة</h3>
+      <div class="field"><label for="err-report-msg">وصف المشكلة</label><input id="err-report-msg" type="text" maxlength="500" placeholder="اشرح المشكلة باختصار"></div>
+      <div class="field"><label for="err-report-details">تفاصيل الخطأ (اختياري)</label><textarea id="err-report-details" rows="3" placeholder="تفاصيل إضافية أو تقنية"></textarea></div>
+      <button type="button" class="btn btn-p" id="err-report-submit">إرسال التقرير</button>
+      <div class="note" id="err-report-status" style="display:none;margin-top:8px;"></div>
+    `;
+    host.prepend(box);
+  }
+  box.style.display="block";
+  const msgEl=document.getElementById("err-report-msg");
+  const detEl=document.getElementById("err-report-details");
+  const stEl=document.getElementById("err-report-status");
+  if(stEl)stEl.style.display="none";
+  if(prefillMessage!==undefined&&prefillMessage!==null&&String(prefillMessage).trim()!==""&&msgEl){
+    msgEl.value=String(prefillMessage).trim();
+  }
+  if(prefillDetails!==undefined&&prefillDetails!==null&&String(prefillDetails).trim()!==""&&detEl){
+    detEl.value=String(prefillDetails).trim();
+  }
+  this._bindErrorReportForm();
+};
+
+K.handleCloudSyncError=function(errOrMsg,extraDetails=""){
+  const msg=(errOrMsg instanceof Error)?String(errOrMsg.message||"خطأ في المزامنة السحابية"):String(errOrMsg||"خطأ في المزامنة السحابية");
+  const details=extraDetails
+    ?(extraDetails instanceof Error?String(extraDetails.stack||extraDetails.message):String(extraDetails))
+    :(errOrMsg instanceof Error?String(errOrMsg.stack||errOrMsg.message):"");
+  const host=document.querySelector("#app")||document.querySelector("main")||document.body;
+  if(!host)return;
+  let banner=document.getElementById("cloud-sync-error-banner");
+  if(!banner){
+    banner=document.createElement("div");
+    banner.id="cloud-sync-error-banner";
+    banner.className="note";
+    banner.style.marginBottom="10px";
+    banner.style.border="1.5px solid #dc2626";
+    banner.style.background="#fef2f2";
+    banner.style.color="#991b1b";
+    host.prepend(banner);
+  }
+  banner.innerHTML=`
+    <div class="row" style="gap:8px;flex-wrap:wrap;">
+      <span>⚠️ تعذّرت المزامنة السحابية: <b>${this.esc(msg)}</b></span>
+      <span class="grow"></span>
+      <button type="button" class="btn btn-a" id="btn-report-sync-error" style="width:auto;margin-top:0;">🛠️ الإبلاغ عن مشكلة</button>
+    </div>
+  `;
+  const btn=document.getElementById("btn-report-sync-error");
+  if(btn){
+    btn.onclick=()=>this.openErrorReportForm(msg,details);
+  }
+};
+
 if(typeof window!=="undefined"){
   window.addEventListener("error",e=>K.toast(e.message&&(/تعذر الحفظ|تعذر حفظ|localStorage/.test(e.message))?"تعذّر الحفظ المحلي؛ لم تكتمل العملية. تحقق من التخزين.":"حدث خطأ غير متوقع في المنصة."));
+  window.addEventListener("unhandledrejection",e=>{
+    const reason=e?e.reason:null;
+    const msg=reason instanceof Error?(reason.message||"خطأ غير معالج في المزامنة السحابية"):String(reason||"خطأ غير معالج في المزامنة السحابية");
+    const details=reason instanceof Error?String(reason.stack||reason.message):String(reason||"");
+    K.handleCloudSyncError(msg,details);
+  });
 }
 
 K.commit=function(entries){

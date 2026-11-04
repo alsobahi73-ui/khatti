@@ -263,6 +263,75 @@
       const from=String(line.from??line.from_area??"").trim();
       const to=String(line.to??line.to_dest??"").trim();
       return (from&&to)?`تم تعديل خط ${from} ← ${to}`:"تم تعديل خط";
+    },
+    isValidSubscriptionPayMethod(method){
+      return typeof method==="string"&&["cash","zain","asia"].includes(method.trim());
+    },
+    buildSubscriptionPayload(sub,sessionDriverId){
+      if(!this.record(sub))return null;
+      const driverId=String(sessionDriverId||sub.driver_id||sub.driverId||"").trim();
+      const rawMethod=sub.pay_method!==undefined?sub.pay_method:(sub.payMethod!==undefined?sub.payMethod:sub.method);
+      const payMethod=(rawMethod===undefined||rawMethod===null||String(rawMethod).trim()==="")?"cash":String(rawMethod).trim();
+      if(!this.isValidSubscriptionPayMethod(payMethod))return null;
+      const rawMonths=(sub.months!==undefined&&sub.months!==null&&String(sub.months).trim()!=="")?sub.months:1;
+      if(!this.integer(rawMonths,1,36))return null;
+      const months=Number(rawMonths);
+      let amount=null;
+      const rawAmount=sub.amount;
+      if(rawAmount!==undefined&&rawAmount!==null&&String(rawAmount).trim()!==""){
+        if(!this.integer(rawAmount,0,100000000))return null;
+        amount=Number(rawAmount);
+      }
+      const planLabel=String(sub.plan_label??sub.planLabel??sub.plan??"اشتراك سائق شهري").trim()||"اشتراك سائق شهري";
+      const payRef=String(sub.pay_ref??sub.payRef??sub.ref??"").trim();
+      const customId=String(sub.id??"").trim();
+      return {
+        id:customId||`sub_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+        driver_id:driverId,
+        plan_label:planLabel,
+        months,
+        amount,
+        pay_method:payMethod,
+        pay_ref:payRef,
+        status:"pending",
+        starts_at:null,
+        ends_at:null
+      };
+    },
+    formatErrorReport(pageOrObj,messageArg,detailsArg,userIdArg){
+      let page="",message="",detailsRaw="",userId="",customId="";
+      if(this.record(pageOrObj)&&!(pageOrObj instanceof Error)){
+        page=String(pageOrObj.page??"").trim();
+        const rawMsg=pageOrObj.message??pageOrObj.msg??"";
+        message=rawMsg instanceof Error?String(rawMsg.message||rawMsg).trim():String(rawMsg).trim();
+        detailsRaw=pageOrObj.details??pageOrObj.detail??"";
+        userId=String(userIdArg??pageOrObj.user_id??pageOrObj.userId??"").trim();
+        customId=String(pageOrObj.id??"").trim();
+      }else{
+        page=String(pageOrObj??"").trim();
+        message=messageArg instanceof Error?String(messageArg.message||messageArg).trim():String(messageArg??"").trim();
+        detailsRaw=detailsArg??"";
+        userId=String(userIdArg??"").trim();
+      }
+      if(!message)return null;
+      let details="";
+      if(detailsRaw instanceof Error){
+        details=String(detailsRaw.stack||detailsRaw.message||detailsRaw).trim();
+      }else if(detailsRaw!==null&&typeof detailsRaw==="object"){
+        try{details=JSON.stringify(detailsRaw);}catch(e){details=String(detailsRaw);}
+      }else{
+        details=String(detailsRaw??"").trim();
+      }
+      if(!page&&typeof location!=="undefined"&&location&&location.pathname){
+        page=String(location.pathname).trim();
+      }
+      return {
+        id:customId||`er_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+        user_id:userId||null,
+        page:page||"/",
+        message:message.slice(0,500),
+        details:details.slice(0,4000)
+      };
     }
   };
   if(typeof module!=="undefined"&&module.exports)module.exports=Core;
