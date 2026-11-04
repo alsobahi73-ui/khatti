@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>المحادثة — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/auth.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
@@ -8,26 +8,75 @@
   const l=K.line(id);
   K.page("محادثة الخط","search.html");
   if(!l){K.missing();return;}
+  const cloud=window.KhattiCloud;
+  const isCloud=()=>Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
+  const tripDate=KhattiCore.today();
+  const channelKey=KhattiCore.chatChannelKey(l.id,tripDate);
+  let cloudMsgs=[];
+  let pollTimer=null;
+
   function render(){
-    const msgs=K.get("chat_"+l.id,[]);
-    const inWin=KhattiCore.inTripWindow(l.go||"07:00",l.back||"14:30");
+    const prevDraft=$("#cin")?$("#cin").value:"";
+    const msgs=isCloud()?cloudMsgs:K.get("chat_"+l.id,[]);
+    const inWin=KhattiCore.canChatInWindow(l);
     $("#app").innerHTML=`
       <div class="card">
-        <p class="mut">محادثة تجريبية محلية؛ الرسائل لا تُرسل إلى سائق أو جهاز آخر.</p><h3>💬 محادثة ${K.esc(l.from)} ← ${K.esc(l.to)}</h3>
+        <p class="mut">${isCloud()?`محادثة جماعية سحابية لرحلة اليوم (${K.esc(channelKey)})`:`محادثة تجريبية محلية؛ الرسائل لا تُرسل إلى سائق أو جهاز آخر.`}</p><h3>💬 محادثة ${K.esc(l.from)} ← ${K.esc(l.to)}</h3>
         ${inWin?"":`<div class="note" id="chat-window-msg" style="margin:8px 0;">الدردشة مغلقة خارج نافذة الرحلة</div>`}
-        <div id="cbox" style="margin:10px 0;">${msgs.map(m=>`<div class="note"><b>${m.me?'أنا':K.esc(l.driver)}:</b> ${K.esc(m.t)} <span class="mut">(${K.esc(m.time)})</span></div>`).join("")}</div>
-        <div class="row"><input id="cin" aria-label="رسالة تجريبية" maxlength="2000" placeholder="${inWin?'اكتب رسالتك...':'الدردشة مغلقة خارج نافذة الرحلة'}" style="flex:1;" ${inWin?"":"disabled"}><button class="btn btn-p" id="csend" ${inWin?"":"disabled"}>حفظ محلي</button></div>
+        <div id="cbox" style="margin:10px 0;">${msgs.map(m=>{const sender=m.me?'أنا':(m.sender_name||l.driver);return `<div class="note"><b>${K.esc(sender)}:</b> ${K.esc(m.msg||m.t||"")} <span class="mut">(${K.esc(m.time||"الآن")})</span></div>`;}).join("")}</div>
+        <div class="row"><input id="cin" aria-label="رسالة تجريبية" maxlength="2000" placeholder="${inWin?'اكتب رسالتك...':'الدردشة مغلقة خارج نافذة الرحلة'}" style="flex:1;" ${inWin?"":"disabled"}><button class="btn btn-p" id="csend" ${inWin?"":"disabled"}>${isCloud()?"إرسال":"حفظ محلي"}</button></div>
       </div>
     `;
-    $("#csend").onclick=function(){
-      if(!KhattiCore.inTripWindow(l.go||"07:00",l.back||"14:30"))return;
+    if(prevDraft&&$("#cin"))$("#cin").value=prevDraft;
+    $("#csend").onclick=async function(){
+      if(!KhattiCore.canChatInWindow(l)){render();return;}
       const v=$("#cin").value.trim();
       if(!v)return;
-      msgs.push({me:1,t:v,time:"الآن"});
-      K.set("chat_"+l.id,msgs);
+      if(isCloud()){
+        const btn=$("#csend");
+        if(btn)btn.disabled=true;
+        const ok=await cloud.pushChatMessage({
+          line_id:l.id,
+          trip_date:tripDate,
+          sender_role:"passenger",
+          sender_name:K.pname(),
+          msg:v
+        });
+        if(btn)btn.disabled=false;
+        if(!ok){
+          K.toast("تعذّر إرسال الرسالة سحابيًا؛ تحقق من الصلاحيات أو الاتصال");
+          return;
+        }
+        if($("#cin"))$("#cin").value="";
+        await pollCloudChat();
+        return;
+      }
+      const localMsgs=K.get("chat_"+l.id,[]);
+      localMsgs.push({me:1,t:v,time:"الآن"});
+      K.set("chat_"+l.id,localMsgs);
+      if($("#cin"))$("#cin").value="";
       render();
     };
   }
+
+  async function pollCloudChat(){
+    if(!KhattiCore.canChatInWindow(l)){
+      if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+      render();
+      return;
+    }
+    const rows=await cloud.pullChatMessages(l.id,tripDate);
+    if(Array.isArray(rows)){
+      cloudMsgs=rows;
+      render();
+    }
+  }
+
+  window.addEventListener("pagehide",()=>{if(pollTimer){clearInterval(pollTimer);pollTimer=null;}},{once:true});
   render();
+  if(isCloud()&&KhattiCore.canChatInWindow(l)){
+    pollCloudChat();
+    pollTimer=setInterval(pollCloudChat,15000);
+  }
 })();
 </script></body></html>
