@@ -11,6 +11,9 @@
   const KhattiAuth = {
     CFG_KEY,
     AUTH_KEY,
+    _refreshTimer: null,
+    _refreshScheduledExp: null,
+    _refreshDelayMs: null,
 
     getConfig(){
       try {
@@ -49,6 +52,68 @@
       return (expSec - nowSec) >= EXPIRY_MARGIN_SEC;
     },
 
+    /* حساب المهلة بالملّي ثانية لتجديد الجلسة قبل انتهائها بـ 60 ثانية (L1) */
+    computeRefreshDelayMs(session, nowMs = Date.now()){
+      if(!session || typeof session !== "object") return -1;
+      const exp = Number(session.expires_at);
+      const nowNum = Number(nowMs);
+      if(!Number.isFinite(exp) || exp <= 0 || !Number.isFinite(nowNum)) return -1;
+      const expMs = exp >= 1e11 ? exp : exp * 1000;
+      const now = nowNum >= 1e11 ? nowNum : nowNum * 1000;
+      return Math.max(0, Math.round(expMs - now - EXPIRY_MARGIN_SEC * 1000));
+    },
+
+    cancelRefreshTimer(){
+      if(this._refreshTimer !== null){
+        clearTimeout(this._refreshTimer);
+        this._refreshTimer = null;
+      }
+      this._refreshScheduledExp = null;
+      this._refreshDelayMs = null;
+    },
+
+    /* جدولة تجديد صامت للجلسة أثناء النشاط قبل انتهائها بـ 60 ثانية (ويُعاد الجدولة بعد كل تجديد).
+     * ملاحظة (L1): بوابة الدخول المتزامنة (K.access) تبقى متزامنة كما هي؛ إعادة الدخول عند تحميل بارد بجلسة منتهية تمامًا مقبولة.
+     */
+    scheduleRefresh(session, nowMs = Date.now()){
+      this.cancelRefreshTimer();
+      if(!this.isSessionValid(session, nowMs)) return null;
+      const delayMs = this.computeRefreshDelayMs(session, nowMs);
+      if(!Number.isFinite(delayMs) || delayMs < 0) return null;
+      this._refreshScheduledExp = Number(session.expires_at);
+      this._refreshDelayMs = delayMs;
+      this._refreshTimer = setTimeout(() => {
+        this._refreshTimer = null;
+        this._refreshScheduledExp = null;
+        this.refreshSession().catch(() => {});
+      }, delayMs);
+      if(this._refreshTimer && typeof this._refreshTimer.unref === "function"){
+        this._refreshTimer.unref();
+      }
+      return this._refreshTimer;
+    },
+
+    /* اشتقاق اسم المستخدم من الجلسة (اسم بيانات المستخدم أو بادئة البريد الإلكتروني) */
+    getPassengerName(session = undefined, fallback = ""){
+      const active = session === undefined ? this.readStoredSession() : session;
+      if(!active || typeof active !== "object") return fallback;
+      const u = (active.user && typeof active.user === "object") ? active.user : active;
+      const meta = (u.user_metadata && typeof u.user_metadata === "object")
+        ? u.user_metadata
+        : ((active.user_metadata && typeof active.user_metadata === "object")
+          ? active.user_metadata
+          : ((u.data && typeof u.data === "object") ? u.data : {}));
+      const rawName = String(meta.name ?? meta.full_name ?? u.name ?? u.full_name ?? active.name ?? "").trim();
+      if(rawName) return rawName;
+      const email = String(u.email ?? active.email ?? "").trim();
+      if(email){
+        const atIdx = email.indexOf("@");
+        const prefix = (atIdx > 0 ? email.slice(0, atIdx) : email).trim();
+        if(prefix) return prefix;
+      }
+      return fallback;
+    },
+
     /* تطبيع استجابة GoTrue إلى صيغة الجلسة الموحدة */
     normalizeSession(raw, fallbackMeta = {}){
       if(!raw || typeof raw !== "object" || !raw.access_token) return null;
@@ -65,6 +130,14 @@
         (u.role && u.role !== "authenticated" && u.role !== "anon" ? u.role : "") ||
         "passenger"
       ).trim() || "passenger";
+      const name = String(
+        meta.name ||
+        meta.full_name ||
+        u.name ||
+        u.full_name ||
+        fb.name ||
+        ""
+      ).trim();
 
       let expiresAt = Number(raw.expires_at);
       if(!Number.isFinite(expiresAt) || expiresAt <= 0){
@@ -72,15 +145,18 @@
         expiresAt = Math.floor(Date.now() / 1000) + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 3600);
       }
 
+      const userObj = {
+        id: String(u.id || fb.id || ""),
+        email: String(u.email || fb.email || ""),
+        role
+      };
+      if(name) userObj.name = name;
+
       return {
         access_token: String(raw.access_token),
         refresh_token: String(raw.refresh_token || ""),
         expires_at: expiresAt,
-        user: {
-          id: String(u.id || fb.id || ""),
-          email: String(u.email || fb.email || ""),
-          role
-        }
+        user: userObj
       };
     },
 
@@ -91,7 +167,13 @@
         if(!raw) return null;
         const parsed = JSON.parse(raw);
         if(!parsed || typeof parsed !== "object" || !parsed.access_token) return null;
-        return this.normalizeSession(parsed, parsed.user || {});
+        const session = this.normalizeSession(parsed, parsed.user || {});
+        if(session && this.isSessionValid(session)){
+          if(this._refreshTimer === null || this._refreshScheduledExp !== session.expires_at){
+            this.scheduleRefresh(session);
+          }
+        }
+        return session;
       } catch(e){
         return null;
       }
@@ -105,10 +187,14 @@
           localStorage.setItem(AUTH_KEY, JSON.stringify(session));
         }
       } catch(e){}
+      if(this.isSessionValid(session)){
+        this.scheduleRefresh(session);
+      }
       return session;
     },
 
     clearSession(){
+      this.cancelRefreshTimer();
       try {
         if(typeof localStorage !== "undefined"){
           localStorage.removeItem(AUTH_KEY);
@@ -607,7 +693,10 @@
     }
   };
 
-  if(typeof window !== "undefined") window.KhattiAuth = KhattiAuth;
+  if(typeof window !== "undefined"){
+    window.KhattiAuth = KhattiAuth;
+    try { KhattiAuth.readStoredSession(); } catch(e){}
+  }
   root.KhattiAuth = KhattiAuth;
   if(typeof module !== "undefined" && module.exports) module.exports = KhattiAuth;
 })(typeof globalThis !== "undefined" ? globalThis : this);
