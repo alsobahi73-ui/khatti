@@ -175,6 +175,32 @@
         return "كلمة مرور ضعيفة؛ يجب أن تتكون من 6 أحرف على الأقل";
       }
 
+      if(
+        lower.includes("otp_expired") ||
+        lower.includes("flow_state_not_found") ||
+        lower.includes("bad_jwt") ||
+        lower.includes("token has expired") ||
+        lower.includes("invalid token") ||
+        lower.includes("expired")
+      ){
+        return "رابط الاستعادة غير صالح أو منتهي الصلاحية؛ اطلب رابطًا جديدًا";
+      }
+
+      if(
+        lower.includes("same_password") ||
+        lower.includes("different from the old password")
+      ){
+        return "كلمة المرور الجديدة يجب أن تختلف عن كلمة المرور السابقة";
+      }
+
+      if(
+        lower.includes("over_email_send_rate_limit") ||
+        lower.includes("rate limit") ||
+        lower.includes("too many requests")
+      ){
+        return "تم إرسال طلبات كثيرة؛ يرجى الانتظار قليلًا ثم المحاولة مجددًا";
+      }
+
       return "تعذّرت عملية المصادقة؛ تحقق من البيانات أو الاتصال وحاول مجددًا";
     },
 
@@ -424,6 +450,160 @@
       } finally {
         clearTimeout(timer);
       }
+    },
+
+    /* تنبيه مهم: يجب إضافة رابط العرض (أصل الصفحة الحالي + /auth.html) إلى قائمة Redirect URLs
+     * في لوحة تحكم Supabase (Authentication -> URL Configuration) حتى يعمل رابط استعادة كلمة المرور.
+     */
+    getRecoveryRedirectUrl(){
+      if(typeof location !== "undefined" && location && location.origin && location.origin !== "null"){
+        return `${String(location.origin).replace(/\/+$/, "")}/auth.html`;
+      }
+      return "http://localhost/auth.html";
+    },
+
+    /* بناء حمولة طلب استعادة كلمة المرور (البريد + redirect_to = أصل الصفحة الحالي + /auth.html) */
+    buildRecoverPayload(emailOrOpts, redirectTo){
+      if(emailOrOpts && typeof emailOrOpts === "object"){
+        const email = String(emailOrOpts.email || "").trim();
+        const redirect_to = String(emailOrOpts.redirect_to || emailOrOpts.redirectTo || redirectTo || this.getRecoveryRedirectUrl()).trim();
+        return { email, redirect_to };
+      }
+      const email = String(emailOrOpts || "").trim();
+      const redirect_to = String(redirectTo || this.getRecoveryRedirectUrl()).trim();
+      return { email, redirect_to };
+    },
+
+    /* إرسال طلب استعادة كلمة المرور: POST {url}/auth/v1/recover */
+    async recoverPassword(emailOrOpts, redirectTo){
+      const payload = this.buildRecoverPayload(emailOrOpts, redirectTo);
+      if(!payload.email || !payload.email.includes("@")){
+        return { ok: false, error: "يرجى إدخال بريد إلكتروني صحيح لاستعادة كلمة المرور" };
+      }
+      if(!this.isConfigured()){
+        return { ok: false, error: "التطبيق غير مكيّف سحابيًا" };
+      }
+      const cfg = this.getConfig();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/auth/v1/recover`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: cfg.key
+          },
+          body: JSON.stringify(payload),
+          signal: ctrl.signal
+        });
+        if(!res || !res.ok){
+          const data = (res && typeof res.json === "function") ? await res.json().catch(() => ({})) : {};
+          return { ok: false, error: this.translateError(data) };
+        }
+        return { ok: true, error: null };
+      } catch(e){
+        return { ok: false, error: this.translateError(e) };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    async recover(emailOrOpts, redirectTo){
+      return await this.recoverPassword(emailOrOpts, redirectTo);
+    },
+
+    /* تحليل hash الاستعادة (#access_token=...&type=recovery) وتثبيت الجلسة من الرمزين */
+    parseRecoveryHash(hashInput){
+      const rawHash = hashInput !== undefined
+        ? String(hashInput || "")
+        : (typeof location !== "undefined" && location ? String(location.hash || "") : "");
+      const clean = rawHash.replace(/^#+/, "").trim();
+      if(!clean) return null;
+      const params = new URLSearchParams(clean);
+      const type = String(params.get("type") || "").trim();
+      const accessToken = String(params.get("access_token") || "").trim();
+      const refreshToken = String(params.get("refresh_token") || "").trim();
+      if(type !== "recovery" || !accessToken) return null;
+
+      const expiresIn = Number(params.get("expires_in"));
+      const expiresAt = Number(params.get("expires_at"));
+      const rawSession = {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 3600,
+        ...(Number.isFinite(expiresAt) && expiresAt > 0 ? { expires_at: expiresAt } : {})
+      };
+      const session = this.saveSession(rawSession);
+      return {
+        type: "recovery",
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: session ? session.expires_at : rawSession.expires_at,
+        session
+      };
+    },
+
+    /* تعيين كلمة مرور جديدة: PUT {url}/auth/v1/user بالرمز */
+    async resetPassword(passwordOrOpts, accessToken){
+      let pwd = "";
+      let token = "";
+      if(passwordOrOpts && typeof passwordOrOpts === "object"){
+        pwd = String(passwordOrOpts.password || passwordOrOpts.newPassword || "");
+        token = String(passwordOrOpts.access_token || passwordOrOpts.accessToken || accessToken || "").trim();
+      } else {
+        pwd = String(passwordOrOpts || "");
+        token = String(accessToken || "").trim();
+      }
+      if(!pwd || pwd.length < 6){
+        return { ok: false, session: null, user: null, error: this.translateError("weak_password") };
+      }
+      if(!this.isConfigured()){
+        return { ok: false, session: null, user: null, error: "التطبيق غير مكيّف سحابيًا" };
+      }
+      const stored = this.readStoredSession();
+      const bearer = token || String(stored?.access_token || "").trim();
+      if(!bearer){
+        return { ok: false, session: null, user: null, error: "رابط الاستعادة غير صالح أو منتهي الصلاحية؛ اطلب رابطًا جديدًا" };
+      }
+      const cfg = this.getConfig();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(`${cfg.url}/auth/v1/user`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: cfg.key,
+            Authorization: `Bearer ${bearer}`
+          },
+          body: JSON.stringify({ password: pwd }),
+          signal: ctrl.signal
+        });
+        const data = (res && typeof res.json === "function") ? await res.json().catch(() => ({})) : {};
+        if(!res || !res.ok){
+          return { ok: false, session: null, user: null, error: this.translateError(data) };
+        }
+        const rawUser = (data && data.user && typeof data.user === "object") ? data.user : data;
+        const baseSession = stored || { access_token: bearer, refresh_token: "" };
+        const updatedSession = this.saveSession(
+          { ...baseSession, access_token: bearer, user: rawUser },
+          stored?.user || {}
+        );
+        return {
+          ok: true,
+          session: updatedSession,
+          user: updatedSession ? updatedSession.user : null,
+          error: null
+        };
+      } catch(e){
+        return { ok: false, session: null, user: null, error: this.translateError(e) };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    async updatePassword(passwordOrOpts, accessToken){
+      return await this.resetPassword(passwordOrOpts, accessToken);
     }
   };
 
