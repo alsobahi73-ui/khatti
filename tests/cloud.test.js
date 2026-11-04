@@ -395,3 +395,95 @@ test('pushLocation, pullLocations, pushAttendance, pushBooking, pushRating enfor
     globalThis.fetch = origFetch;
   }
 });
+
+test('pushLine and deleteLine enforce session driver_id, choose PATCH vs POST, send Bearer token, and handle missing session', async () => {
+  setupEnv();
+  const origFetch = globalThis.fetch;
+  try {
+    localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
+      url: 'https://test-proj.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
+    }));
+
+    // 1. Without session in cloud mode -> returns false without making network request
+    let fetchCount = 0;
+    globalThis.fetch = async () => { fetchCount++; return { ok: true }; };
+    assert.equal(await KhattiCloud.pushLine({ from: 'الكرادة', to: 'الجادرية' }), false);
+    assert.equal(await KhattiCloud.deleteLine('l1'), false);
+    assert.equal(fetchCount, 0);
+
+    // 2. With active driver session -> POST when id is absent, forces driver_id from session (ignoring payload driver_id), sends Bearer header
+    localStorage.setItem('khatti_demo_v1_auth', JSON.stringify({
+      access_token: 'driver_jwt_token_abc',
+      refresh_token: 'driver_ref_token',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 'session-driver-uuid', email: 'driver@khatti.iq', role: 'driver' }
+    }));
+
+    const requests = [];
+    globalThis.fetch = async (url, opts) => {
+      requests.push({ url, opts, body: opts.body ? JSON.parse(opts.body) : null });
+      return { ok: true };
+    };
+
+    const created = await KhattiCloud.pushLine({
+      driver_id: 'spoofed-other-driver-id',
+      driverId: 'spoofed-other-driver-id-2',
+      from: 'المنصور',
+      to: 'جامعة بغداد (الجادرية)',
+      vehicle: 'كيا بيجاس 2023',
+      plate: 'بغداد 99881',
+      comp: 'girls',
+      price: 75000,
+      seats: 14,
+      free: 10,
+      go: '07:15',
+      back: '14:45',
+      pickups: ['الرواد', '14 رمضان']
+    });
+    assert.equal(created, true);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, 'https://test-proj.supabase.co/rest/v1/khatti_lines');
+    assert.equal(requests[0].opts.method, 'POST');
+    assert.equal(requests[0].opts.headers.Authorization, 'Bearer driver_jwt_token_abc');
+    assert.equal(requests[0].opts.headers.apikey, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key');
+    assert.ok(requests[0].opts.signal);
+    assert.match(requests[0].body.id, /^l_[0-9a-z]+$/);
+    assert.equal(requests[0].body.driver_id, 'session-driver-uuid');
+    assert.equal(requests[0].body.from_area, 'المنصور');
+    assert.equal(requests[0].body.to_dest, 'جامعة بغداد (الجادرية)');
+
+    // 3. With existing id -> uses PATCH on /rest/v1/khatti_lines?id=eq.<id> and still forces session driver_id
+    const updated = await KhattiCloud.pushLine({
+      id: 'l_existing_42',
+      driver_id: 'attacker-id',
+      from: 'الأعظمية',
+      to: 'الباب المعظم',
+      price: 65000,
+      seats: 12,
+      free: 4
+    });
+    assert.equal(updated, true);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].url, 'https://test-proj.supabase.co/rest/v1/khatti_lines?id=eq.l_existing_42');
+    assert.equal(requests[1].opts.method, 'PATCH');
+    assert.equal(requests[1].opts.headers.Authorization, 'Bearer driver_jwt_token_abc');
+    assert.equal(requests[1].body.id, 'l_existing_42');
+    assert.equal(requests[1].body.driver_id, 'session-driver-uuid');
+
+    // 4. deleteLine sends DELETE to /rest/v1/khatti_lines?id=eq.<id> with Bearer header
+    const deleted = await KhattiCloud.deleteLine('l_existing_42');
+    assert.equal(deleted, true);
+    assert.equal(requests.length, 3);
+    assert.equal(requests[2].url, 'https://test-proj.supabase.co/rest/v1/khatti_lines?id=eq.l_existing_42');
+    assert.equal(requests[2].opts.method, 'DELETE');
+    assert.equal(requests[2].opts.headers.Authorization, 'Bearer driver_jwt_token_abc');
+
+    // 5. Non-OK response returns false
+    globalThis.fetch = async () => ({ ok: false, status: 403 });
+    assert.equal(await KhattiCloud.pushLine({ id: 'l_existing_42', from: 'الكرادة', to: 'الجادرية' }), false);
+    assert.equal(await KhattiCloud.deleteLine('l_existing_42'), false);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
