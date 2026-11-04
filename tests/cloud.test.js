@@ -125,7 +125,7 @@ test('fetchLines returns null when unconfigured or on fetch/response error, and 
   }
 });
 
-test('pushBooking returns false when unconfigured and sends payment fields in request body', async () => {
+test('pushBooking PATCHes an existing booking only (no insert) and sends payment fields', async () => {
   setupEnv();
   const origFetch = globalThis.fetch;
   try {
@@ -143,9 +143,11 @@ test('pushBooking returns false when unconfigured and sends payment fields in re
     }));
 
     const payloads = [];
-    globalThis.fetch = async (_url, opts) => {
+    const urls = [];
+    globalThis.fetch = async (url, opts) => {
+      urls.push({ url, method: opts.method });
       payloads.push(JSON.parse(opts.body));
-      return { ok: true };
+      return { ok: true, json: async () => [{ id: 'b1' }] };
     };
 
     // 2. Reads payment fields from booking.payment (method/status/ref)
@@ -177,21 +179,28 @@ test('pushBooking returns false when unconfigured and sends payment fields in re
     assert.equal(payloads[2].pay_method, 'cash');
     assert.equal(payloads[2].pay_status, 'pending');
     assert.equal(payloads[2].pay_ref, '');
+    assert.equal(urls[0].url, 'https://test-proj.supabase.co/rest/v1/khatti_bookings?id=eq.b1');
+    assert.equal(urls[0].method, 'PATCH');
+    assert.equal(payloads[0].id, undefined);
+    assert.equal(payloads[0].line_id, undefined);
+
+    // 5. PATCH with no matching row returns false (no silent insert)
+    globalThis.fetch = async () => ({ ok: true, json: async () => [] });
+    assert.equal(await KhattiCloud.pushBooking({ id: 'b9' }), false);
   } finally {
     globalThis.fetch = origFetch;
   }
 });
 
-test('pushRating and pullRatings handle unconfigured state, composite ID, payload fields, and row mapping', async () => {
+test('pushRating handles unconfigured state, composite ID, payload fields, and errors', async () => {
   setupEnv();
   const origFetch = globalThis.fetch;
   try {
     let fetchCalled = false;
     globalThis.fetch = async () => { fetchCalled = true; return { ok: true, json: async () => [] }; };
 
-    // 1. Unconfigured -> pushRating returns false, pullRatings returns [] without calling fetch
+    // 1. Unconfigured -> pushRating returns false without calling fetch
     assert.equal(await KhattiCloud.pushRating({ tripId: 't1', lineId: 'l1', role: 'passenger', stars: 5, comment: 'ممتاز' }), false);
-    assert.deepEqual(await KhattiCloud.pullRatings('t1'), []);
     assert.equal(fetchCalled, false);
 
     // Configure valid url and key
@@ -228,71 +237,23 @@ test('pushRating and pullRatings handle unconfigured state, composite ID, payloa
     assert.strictEqual(body.stars, 4);
     assert.equal(body.comment, 'راكب ملتزم بالوقت');
 
-    // 3. pullRatings filters by trip_id and maps rows to {role, stars, comment}
-    let capturedPullUrl = '';
-    globalThis.fetch = async (url) => {
-      capturedPullUrl = url;
-      return {
-        ok: true,
-        json: async () => ([
-          { id: 't1:passenger', trip_id: 't1', line_id: 'l1', rater_role: 'passenger', stars: 5, comment: 'رحلة مريحة' },
-          { id: 't1:driver', trip_id: 't1', line_id: 'l1', rater_role: 'driver', stars: 4, comment: '' }
-        ])
-      };
-    };
-
-    const ratings = await KhattiCloud.pullRatings('t1');
-    assert.equal(capturedPullUrl, 'https://test-proj.supabase.co/rest/v1/khatti_ratings?trip_id=eq.t1&select=*');
-    assert.deepEqual(ratings, [
-      { role: 'passenger', stars: 5, comment: 'رحلة مريحة' },
-      { role: 'driver', stars: 4, comment: '' }
-    ]);
-
-    // 4. Error / non-OK response returns false for pushRating and [] for pullRatings
+    // 3. Error / non-OK response returns false for pushRating
     globalThis.fetch = async () => ({ ok: false, status: 500 });
     assert.equal(await KhattiCloud.pushRating({ tripId: 't1', lineId: 'l1', role: 'passenger', stars: 5 }), false);
-    assert.deepEqual(await KhattiCloud.pullRatings('t1'), []);
   } finally {
     globalThis.fetch = origFetch;
   }
 });
 
-test('reserveSeats, loadLines _cloud tagging, and K.line cloud vs local seat deduction', async () => {
+test('loadLines _cloud tagging, and K.line cloud vs local seat deduction', async () => {
   setupEnv();
   const origFetch = globalThis.fetch;
   try {
-    // 1. Unconfigured reserveSeats returns false without calling fetch
-    let fetchCalled = false;
-    globalThis.fetch = async () => { fetchCalled = true; return { ok: true, json: async () => true }; };
-    assert.equal(await KhattiCloud.reserveSeats('l1', 2), false);
-    assert.equal(fetchCalled, false);
-
     // Configure cloud
     localStorage.setItem('khatti_supabase_config_v1', JSON.stringify({
       url: 'https://test-proj.supabase.co',
       key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key'
     }));
-
-    // 2. reserveSeats sends POST to /rest/v1/rpc/reserve_seat with AbortSignal and checks res.ok & boolean return
-    let rpcUrl = '';
-    let rpcOpts = null;
-    globalThis.fetch = async (url, opts) => {
-      rpcUrl = url;
-      rpcOpts = opts;
-      return { ok: true, json: async () => true };
-    };
-    assert.equal(await KhattiCloud.reserveSeats('l1', 2), true);
-    assert.equal(rpcUrl, 'https://test-proj.supabase.co/rest/v1/rpc/reserve_seat');
-    assert.equal(rpcOpts.method, 'POST');
-    assert.ok(rpcOpts.signal);
-    assert.deepEqual(JSON.parse(rpcOpts.body), { p_line_id: 'l1', p_seats: 2 });
-
-    // When RPC returns false (insufficient seats) or HTTP error
-    globalThis.fetch = async () => ({ ok: true, json: async () => false });
-    assert.equal(await KhattiCloud.reserveSeats('l1', 3), false);
-
-    globalThis.fetch = async () => ({ ok: false, status: 500, json: async () => true });
-    assert.equal(await KhattiCloud.reserveSeats('l1', 1), false);
 
     // 3. loadLines tags cloud lines with _cloud=true and K.line skips local deduction only for _cloud lines
     globalThis.LINES = [
@@ -398,7 +359,7 @@ test('pushLocation, pullLocations, pushAttendance, pushBooking, pushRating enfor
   }
 });
 
-test('pushLine and deleteLine enforce session driver_id, choose PATCH vs POST, send Bearer token, and handle missing session', async () => {
+test('pushLine enforces approved driver and session driver_id, choose PATCH vs POST, send Bearer token, and handle missing session', async () => {
   setupEnv();
   const origFetch = globalThis.fetch;
   try {
@@ -411,7 +372,6 @@ test('pushLine and deleteLine enforce session driver_id, choose PATCH vs POST, s
     let fetchCount = 0;
     globalThis.fetch = async () => { fetchCount++; return { ok: true }; };
     assert.equal(await KhattiCloud.pushLine({ from: 'الكرادة', to: 'الجادرية' }), false);
-    assert.equal(await KhattiCloud.deleteLine('l1'), false);
     assert.equal(fetchCount, 0);
 
     // 2. With active driver session -> POST when id is absent, forces driver_id from session (ignoring payload driver_id), sends Bearer header
@@ -425,6 +385,7 @@ test('pushLine and deleteLine enforce session driver_id, choose PATCH vs POST, s
     const requests = [];
     globalThis.fetch = async (url, opts) => {
       requests.push({ url, opts, body: opts.body ? JSON.parse(opts.body) : null });
+      if(String(url).includes('khatti_driver_profiles')) return { ok: true, json: async () => [{ user_id: 'session-driver-uuid', status: 'approved' }] };
       return { ok: true };
     };
 
@@ -444,16 +405,16 @@ test('pushLine and deleteLine enforce session driver_id, choose PATCH vs POST, s
       pickups: ['الرواد', '14 رمضان']
     });
     assert.equal(created, true);
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0].url, 'https://test-proj.supabase.co/rest/v1/khatti_lines');
-    assert.equal(requests[0].opts.method, 'POST');
-    assert.equal(requests[0].opts.headers.Authorization, 'Bearer driver_jwt_token_abc');
-    assert.equal(requests[0].opts.headers.apikey, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key');
-    assert.ok(requests[0].opts.signal);
-    assert.match(requests[0].body.id, /^l_[0-9a-z]+$/);
-    assert.equal(requests[0].body.driver_id, 'session-driver-uuid');
-    assert.equal(requests[0].body.from_area, 'المنصور');
-    assert.equal(requests[0].body.to_dest, 'جامعة بغداد (الجادرية)');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].url, 'https://test-proj.supabase.co/rest/v1/khatti_lines');
+    assert.equal(requests[1].opts.method, 'POST');
+    assert.equal(requests[1].opts.headers.Authorization, 'Bearer driver_jwt_token_abc');
+    assert.equal(requests[1].opts.headers.apikey, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid_length_key');
+    assert.ok(requests[1].opts.signal);
+    assert.match(requests[1].body.id, /^l_[0-9a-z]+$/);
+    assert.equal(requests[1].body.driver_id, 'session-driver-uuid');
+    assert.equal(requests[1].body.from_area, 'المنصور');
+    assert.equal(requests[1].body.to_dest, 'جامعة بغداد (الجادرية)');
 
     // 3. With existing id -> uses PATCH on /rest/v1/khatti_lines?id=eq.<id> and still forces session driver_id
     const updated = await KhattiCloud.pushLine({
@@ -466,36 +427,35 @@ test('pushLine and deleteLine enforce session driver_id, choose PATCH vs POST, s
       free: 4
     });
     assert.equal(updated, true);
-    assert.equal(requests.length, 2);
-    assert.equal(requests[1].url, 'https://test-proj.supabase.co/rest/v1/khatti_lines?id=eq.l_existing_42');
-    assert.equal(requests[1].opts.method, 'PATCH');
-    assert.equal(requests[1].opts.headers.Authorization, 'Bearer driver_jwt_token_abc');
-    assert.equal(requests[1].body.id, 'l_existing_42');
-    assert.equal(requests[1].body.driver_id, 'session-driver-uuid');
+    assert.equal(requests.length, 4);
+    assert.equal(requests[3].url, 'https://test-proj.supabase.co/rest/v1/khatti_lines?id=eq.l_existing_42');
+    assert.equal(requests[3].opts.method, 'PATCH');
+    assert.equal(requests[3].opts.headers.Authorization, 'Bearer driver_jwt_token_abc');
+    assert.equal(requests[3].body.id, 'l_existing_42');
+    assert.equal(requests[3].body.driver_id, 'session-driver-uuid');
 
-    // 4. deleteLine sends DELETE to /rest/v1/khatti_lines?id=eq.<id> with Bearer header
-    const deleted = await KhattiCloud.deleteLine('l_existing_42');
-    assert.equal(deleted, true);
-    assert.equal(requests.length, 3);
-    assert.equal(requests[2].url, 'https://test-proj.supabase.co/rest/v1/khatti_lines?id=eq.l_existing_42');
-    assert.equal(requests[2].opts.method, 'DELETE');
-    assert.equal(requests[2].opts.headers.Authorization, 'Bearer driver_jwt_token_abc');
+    // 4. Unapproved driver profile blocks line creation without a lines request
+    globalThis.fetch = async (url, opts) => {
+      requests.push({ url, opts, body: opts.body ? JSON.parse(opts.body) : null });
+      return { ok: true, json: async () => [{ user_id: 'session-driver-uuid', status: 'pending' }] };
+    };
+    const beforeUnapproved = requests.length;
+    assert.equal(await KhattiCloud.pushLine({ from: 'الكرادة', to: 'الجادرية' }), false);
+    assert.equal(requests.length, beforeUnapproved + 1);
 
     // 5. Non-OK response returns false
     globalThis.fetch = async () => ({ ok: false, status: 403 });
     assert.equal(await KhattiCloud.pushLine({ id: 'l_existing_42', from: 'الكرادة', to: 'الجادرية' }), false);
-    assert.equal(await KhattiCloud.deleteLine('l_existing_42'), false);
   } finally {
     globalThis.fetch = origFetch;
   }
 });
 
-test('H1, H4, H5, M2, M3: getLinePhone, createBookingAtomic, K.pname session identity, rater_user_id & hasOtherRating, and markAbsent', async () => {
+test('H4, H5, M2, M3: createBookingAtomic, K.pname session identity, rater_user_id & hasOtherRating, and markAbsent', async () => {
   setupEnv();
   const origFetch = globalThis.fetch;
   try {
     // Unconfigured guards
-    assert.equal(await KhattiCloud.getLinePhone('l1'), null);
     assert.equal(await KhattiCloud.createBookingAtomic({ lineId: 'l1', seats: ['مقعد 1'] }), null);
     assert.equal(await KhattiCloud.hasOtherRating('t1', 'passenger'), false);
     assert.equal(await KhattiCloud.markAbsent('l1', 'st_1', '2026-10-15'), false);
@@ -511,19 +471,6 @@ test('H1, H4, H5, M2, M3: getLinePhone, createBookingAtomic, K.pname session ide
       expires_at: Math.floor(Date.now() / 1000) + 3600,
       user: { id: 'pax-uuid-55', email: 'zainab.iq@khatti.iq', role: 'passenger', name: 'زينب قاسم' }
     }));
-
-    // 1. H1: getLinePhone calls /rest/v1/rpc/get_line_phone
-    const calls = [];
-    globalThis.fetch = async (url, opts) => {
-      calls.push({ url, body: opts.body ? JSON.parse(opts.body) : null });
-      return { ok: true, json: async () => '07701234567' };
-    };
-    assert.equal(await KhattiCloud.getLinePhone('l1'), '07701234567');
-    assert.equal(calls[0].url, 'https://test-proj.supabase.co/rest/v1/rpc/get_line_phone');
-    assert.deepEqual(calls[0].body, { p_line_id: 'l1' });
-
-    globalThis.fetch = async () => ({ ok: true, json: async () => null });
-    assert.equal(await KhattiCloud.getLinePhone('l2'), null);
 
     // 2. H4: createBookingAtomic sends atomic RPC payload without user_id and returns booking id or null
     let atomicCall = null;
