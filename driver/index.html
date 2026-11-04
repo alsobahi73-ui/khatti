@@ -9,6 +9,7 @@
   if(!l){K.missing();return;}
   let reviewBannerVisible=false;
   let myLines=[];
+  let notifyReqs=K.get("lineNotifyReqs",[]);
 
   function render(){
     const att=K.attendance(l.id);
@@ -18,6 +19,8 @@
     const comments=Array.isArray(l.comments)?l.comments:[];
     const pendingReplies=comments.filter(c=>!c.r).length;
     const occ=Math.max(0,l.seats-l.free);
+    const demandLines=myLines.length>0?myLines:[l];
+    const demandCounts=KhattiCore.countLineNotifyRequests(demandLines,notifyReqs);
 
     $("#app").innerHTML=`
       ${reviewBannerVisible?`
@@ -50,7 +53,19 @@
               </div>
               <span class="grow"></span>
               <a class="btn btn-p" href="line-edit.html?id=${encodeURIComponent(ml.id)}" style="margin-top:0;width:auto;">✏️ تحرير</a>
+              <a class="btn btn-g" href="chat.html?id=${encodeURIComponent(ml.id)}" style="margin-top:0;width:auto;">💬 محادثة</a>
             </div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="card" id="my-lines-demand-card">
+        <h3>📊 الطلب على خطوطي</h3>
+        ${demandCounts.map(dc=>`
+          <div class="row" style="margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+            <span><b>${K.esc(dc.from)} ↔ ${K.esc(dc.to)}</b></span>
+            <span class="grow"></span>
+            <span class="badge b-m">${dc.count} طلب</span>
           </div>
         `).join("")}
       </div>
@@ -100,6 +115,7 @@
         <h3>⚙️ إدارة الحساب</h3>
         <a class="btn btn-a" href="board.html">🎫 تحقق صعود الركاب (PIN)</a>
         <a class="btn btn-p" href="line-edit.html">⚙️ تعديل مسار الخط وأوقات الحركة</a>
+        <a class="btn btn-g" href="chat.html?id=${encodeURIComponent(l.id)}">💬 محادثة الخط</a>
         <a class="btn btn-g" href="broadcast.html">📢 إرسال تنبيه للركاب والأهالي</a>
         <a class="btn btn-g" href="holiday-post.html">🎉 نشر سفرة أو رحلة عطلة منفصلة</a>
         <a class="btn btn-g" href="ratings.html">⭐ مشاهدة تقييمات المشتركين (${pendingReplies} تحتاج رد)</a>
@@ -137,6 +153,15 @@
         const allLines=await cloud.fetchLines();
         if(Array.isArray(allLines)){
           myLines=allLines.filter(x=>x&&String(x.driver_id||x.driverId||"")===String(sess.user.id));
+          render();
+        }
+      }catch(_){}
+    }
+    if(typeof cloud.pullNotifyRequests==="function"){
+      try{
+        const remoteReqs=await cloud.pullNotifyRequests();
+        if(Array.isArray(remoteReqs)){
+          notifyReqs=remoteReqs;
           render();
         }
       }catch(_){}
