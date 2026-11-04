@@ -71,6 +71,18 @@ const K={
       return Boolean(cfg&&cfg.url&&String(cfg.url).startsWith("https://")&&cfg.key&&String(cfg.key).length>20);
     }catch(e){return false;}
   },
+  _session(){
+    if(typeof KhattiAuth!=="undefined"&&KhattiAuth&&typeof KhattiAuth.readStoredSession==="function"){
+      const s=KhattiAuth.readStoredSession();
+      if(s)return s;
+    }
+    try{
+      const raw=localStorage.getItem("khatti_demo_v1_auth");
+      if(!raw)return null;
+      const s=JSON.parse(raw);
+      return (s&&typeof s==="object")?s:null;
+    }catch(e){return null;}
+  },
   _validSession(){
     if(typeof KhattiAuth!=="undefined"&&KhattiAuth&&typeof KhattiAuth.readStoredSession==="function"){
       const s=KhattiAuth.readStoredSession();
@@ -93,6 +105,7 @@ const K={
     const inSub = location.pathname.includes("/driver/")||location.pathname.includes("/passenger/")||location.pathname.includes("/parent/");
     const prefix = inSub ? "../" : "";
     if(this._isCloud()){
+      /* M1: الدور في صفحات السائق يُقرأ من الجلسة لتوجيه الواجهة فقط (مقبول: سياسات RLS على الخادم تحمي جميع البيانات والعمليات). */
       const sess = this._validSession();
       if(role==="driver"){
         if(!sess||sess.user?.role!=="driver"){location.href=prefix+"auth.html?role=driver";return;}
@@ -318,7 +331,17 @@ Object.assign(K,{
   },
   holMatch(an,rq){return an.from===rq.from&&an.to===rq.to&&an.date===rq.date&&an.comp===rq.comp&&KhattiCore.integer(rq.seats,1,this.holFree(an))&&KhattiCore.future(an.date,an.time)},
   tripLine(t){return t.holId?this.hol(t.holId):this.line(t.lineId)},
-  pname(){const m=this.get("me",null);return m?m.name:(typeof ME!=="undefined"?ME.name:"أحمد علي")},
+  pname(){
+    if(this._isCloud()){
+      const sess=this._session();
+      const derived=(typeof KhattiCore!=="undefined"&&KhattiCore&&typeof KhattiCore.passengerNameFromSession==="function")
+        ?KhattiCore.passengerNameFromSession(sess)
+        :"";
+      if(derived)return derived;
+    }
+    const m=this.get("me",null);
+    return m?m.name:(typeof ME!=="undefined"?ME.name:"أحمد علي");
+  },
   dname(){const d=this.get("driver",null);return d?d.name:(typeof MYDRIVER!=="undefined"?MYDRIVER.name:"أبو محمد الحسني")},
   pushHolNotif(msg,link){
     const n=this.get("holNotifs",[]);
@@ -350,6 +373,10 @@ Object.assign(K,{
   }
 });
 
+/* بوابة الدخول المتزامنة (L1 & M1):
+ * - L1: البوابة تبقى متزامنة كما هي؛ إعادة الدخول عند تحميل بارد بجلسة منتهية تمامًا مقبولة، بينما تُجدَّد الجلسة النشطة صامتًا قبل انتهائها بـ 60 ثانية.
+ * - M1: التحقق من دور السائق في صفحات السائق يعتمد على الجلسة لتوجيه الواجهة فقط، وهو مقبول لأن سياسات RLS على الخادم تحمي جميع البيانات والعمليات فعليًا.
+ */
 K.access=function(){
   const p=location.pathname;
   const driver=p.includes("/driver/"),passenger=p.includes("/passenger/");
