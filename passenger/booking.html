@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>حجز مقعد — خطي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/auth.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
@@ -132,19 +132,20 @@
     if(!current||!KhattiCore.integer(selectedSeats.length,1,Math.min(3,current.free))||selectedSeats.some(s=>unavailable(s)||latestReserved.includes(s))){K.toast("اختر مقاعد متاحة؛ العدد لا يتجاوز المقاعد المتبقية");return}
     const cloud=window.KhattiCloud;
     const cloudReady=Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
-    const finalizeBooking=()=>{
+    const payMethod=$("#pay-method")?$("#pay-method").value:"cash";
+    const isPrepaid=payMethod==="zaincash"||payMethod==="asiahawala";
+    const payRef=isPrepaid&&$("#pay-ref")?$("#pay-ref").value.trim():"";
+    const passengerName=K.pname();
+    const finalizeBooking=(forcedId)=>{
       const curBookings=K.get("bookings",[]);
       const trips=K.get("trips",[]);
-      const newId="bk_"+Date.now();
+      const newId=forcedId||("bk_"+Date.now());
       const pin=String(Math.floor(1000+Math.random()*9000)); /* §3.14.1 — رمز صعود */
       const when=`${l.go||"07:00"} — عودة ${$("#return-shift").value} (${selectedPlan.label})`;
-      const payMethod=$("#pay-method")?$("#pay-method").value:"cash";
-      const isPrepaid=payMethod==="zaincash"||payMethod==="asiahawala";
-      const payRef=isPrepaid&&$("#pay-ref")?$("#pay-ref").value.trim():"";
       const entry={
         id:newId,
         lineId:l.id,
-        passengerName:K.pname(),
+        passengerName:passengerName,
         serviceDate,
         when,
         status:"upcoming",
@@ -163,22 +164,29 @@
       try{K.commit({bookings:[entry,...curBookings],trips:[entry,...trips]})}catch(e){K.toast("تعذّر حفظ الحجز؛ لم يتم تأكيده. تحقق من التخزين.");return}
       saved=true;$("#ok").disabled=true;
       K.toast("حُفظ حجز محلي تجريبي؛ لا حجز فعلي. رمز تجريبي: "+pin.split("").join(" "));
-      if(cloud&&typeof cloud.pushBooking==="function"){
-        cloud.pushBooking(entry).then(ok=>{if(cloudReady&&!ok)K.toast("تعذّر مزامنة الحجز سحابيًا؛ تم الحفظ محليًا")}).catch(()=>{if(cloudReady)K.toast("تعذّر مزامنة الحجز سحابيًا؛ تم الحفظ محليًا")});
-      }
       setTimeout(()=>location.href="trips.html",1600);
     };
-    if(cloudReady&&typeof cloud.reserveSeats==="function"){
+    if(cloudReady&&typeof cloud.createBookingAtomic==="function"){
       reserving=true;
-      Promise.resolve(cloud.reserveSeats(l.id,selectedSeats.length)).then(ok=>{
+      const draft={
+        lineId:l.id,
+        passengerName:passengerName,
+        phone:ph,
+        plan:selectedPlan.label,
+        seats:selectedSeats,
+        pickup:$("#pickup").value,
+        returnShift:$("#return-shift").value,
+        payment:{method:payMethod,status:"pending",ref:payRef}
+      };
+      Promise.resolve(cloud.createBookingAtomic(draft)).then(bookingId=>{
         reserving=false;
-        if(!ok){
+        if(!bookingId){
           K.toast("لا توجد مقاعد كافية");
           return;
         }
         const rawLine=(typeof LINES!=="undefined"?LINES:[]).find(x=>x.id===l.id);
         if(rawLine&&rawLine._cloud)rawLine.free=Math.max(0,Number(rawLine.free)-selectedSeats.length);
-        finalizeBooking();
+        finalizeBooking(String(bookingId));
       }).catch(()=>{
         reserving=false;
         K.toast("لا توجد مقاعد كافية");
