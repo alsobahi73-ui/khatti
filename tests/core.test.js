@@ -138,3 +138,67 @@ test('pure helpers: atomic booking payload, rating reveal from myRating + otherF
  assert.equal(C.resolveStudentParentCode(null, {}, { parentCode: 'KH-3341' }), 'KH-3341');
  assert.equal(C.resolveStudentParentCode(null, null, null), 'KH-4829');
 });
+
+test('Slice 3 pure logic: chatChannelKey, canChatInWindow gate, filterLines (maxPrice & minRating), availability banner decision, demand counts, and line update broadcast message',()=>{
+ // 1. مفتاح القناة (line_id + trip_date)
+ assert.equal(C.chatChannelKey('l1','2026-11-04'),'l1:2026-11-04');
+ assert.equal(C.chatChannelKey('  l2 ','2026-10-15'),'l2:2026-10-15');
+ assert.match(C.chatChannelKey('l1'),/^l1:\d{4}-\d{2}-\d{2}$/);
+ assert.equal(C.chatChannelKey('','2026-11-04'),'');
+ assert.equal(C.chatChannelKey('l1','invalid-date'),'');
+
+ // 2. بوابة نافذة الرحلة للمحادثة (canChatInWindow)
+ const line={id:'l1',go:'07:00',back:'14:30'};
+ assert.equal(C.canChatInWindow(line,'05:59'),false);
+ assert.equal(C.canChatInWindow(line,'06:00'),true);
+ assert.equal(C.canChatInWindow(line,'11:30'),true);
+ assert.equal(C.canChatInWindow(line,'15:00'),true);
+ assert.equal(C.canChatInWindow(line,'15:01'),false);
+ assert.equal(C.canChatInWindow('07:30','15:00','06:30'),true);
+ assert.equal(C.canChatInWindow('07:30','15:00','06:29'),false);
+
+ // 3. منطق الفلاتر (filterLines: area, uni, comp, maxPrice, minRating) دون تعديل المدخلات
+ const sampleLines=[
+  {id:'l1',from:'الكرادة',to:'جامعة بغداد (الجادرية)',comp:'girls',price:60000,rating:4.9,free:11},
+  {id:'l2',from:'المنصور',to:'الجامعة المستنصرية',comp:'mixed',price:80000,rating:4.8,free:2},
+  {id:'l3',from:'الكرادة',to:'الجامعة المستنصرية',comp:'boys',price:50000,rating:4.2,free:0}
+ ];
+ assert.equal(C.filterLines(sampleLines,{}).length,3);
+ assert.deepEqual(C.filterLines(sampleLines,{maxPrice:60000}).map(x=>x.id),['l1','l3']);
+ assert.deepEqual(C.filterLines(sampleLines,{maxPrice:'55000'}).map(x=>x.id),['l3']);
+ assert.deepEqual(C.filterLines(sampleLines,{minRating:4.8}).map(x=>x.id),['l1','l2']);
+ assert.deepEqual(C.filterLines(sampleLines,{minRating:'4.85'}).map(x=>x.id),['l1']);
+ assert.deepEqual(C.filterLines(sampleLines,{maxPrice:70000,minRating:4.5}).map(x=>x.id),['l1']);
+ assert.deepEqual(C.filterLines(sampleLines,{area:'الكرادة',maxPrice:60000,minRating:4.5}).map(x=>x.id),['l1']);
+ assert.deepEqual(C.filterLines(sampleLines,{comp:'mixed',maxPrice:'',minRating:''}).map(x=>x.id),['l2']);
+
+ // 4. قرار شريط التوفر (shouldShowAvailabilityBanner & getAvailabilityBanners) وعدد الطلبات على خطوط السائق
+ const reqs=[
+  {id:'l1:u1',line_id:'l1',user_id:'u1'},
+  {id:'l3:u1',line_id:'l3',user_id:'u1'},
+  {id:'l1:u2',line_id:'l1',user_id:'u2'}
+ ];
+ // l1 has free=11 (>0) and user u1 has a request -> true
+ assert.equal(C.shouldShowAvailabilityBanner(sampleLines[0],reqs,'u1'),true);
+ // l3 has free=0 -> false even though u1 has a request
+ assert.equal(C.shouldShowAvailabilityBanner(sampleLines[2],reqs,'u1'),false);
+ // l2 has free=2 (>0) but no request -> false
+ assert.equal(C.shouldShowAvailabilityBanner(sampleLines[1],reqs,'u1'),false);
+ // different user u3 has no request on l1 -> false
+ assert.equal(C.shouldShowAvailabilityBanner(sampleLines[0],reqs,'u3'),false);
+
+ const banners=C.getAvailabilityBanners(sampleLines,reqs,'u1');
+ assert.equal(banners.length,1);
+ assert.equal(banners[0].lineId,'l1');
+ assert.match(banners[0].msg,/^أصبحت مقاعد متاحة على خط الكرادة ← جامعة بغداد \(الجادرية\)$/);
+
+ const counts=C.countLineNotifyRequests(sampleLines,reqs);
+ assert.deepEqual(counts.map(c=>({lineId:c.lineId,count:c.count})),[
+  {lineId:'l1',count:2},
+  {lineId:'l2',count:0},
+  {lineId:'l3',count:1}
+ ]);
+
+ // 5. نص تنبيه تعديل الخط
+ assert.equal(C.buildLineUpdateBroadcastMsg({from:'الكرادة',to:'الجادرية'}),'تم تعديل خط الكرادة ← الجادرية');
+});
