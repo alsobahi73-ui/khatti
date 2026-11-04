@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تحقق الصعود — خطّي</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="../assets/style-v2.css"></head>
 <body><div class="wrap"><main id="app"></main></div>
-<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/auth.js"></script><script src="../assets/cloud.js"></script><script src="../assets/app.js"></script>
 <script>
 (function(){
   if(!K.access())return;
@@ -120,13 +120,18 @@ const pin=$("#pin").value.trim();
 if(!/^\d{4}$/.test(pin)){K.toast("أدخل رمزًا من 4 أرقام");return}
 const bs=K.get("bookings",[]);const b=bs.find(x=>x.lineId===MYDRIVER.lineId&&x.status==="upcoming"&&x.pin===pin&&!x.boarded);
 if(!b){K.toast("رمز غير صالح أو مستخدم مسبقًا ❌");return}
-b.boarded=true;b.boardAt=new Date().toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"});b.boardName=K.pname();
+const studentName=b.passengerName||b.passenger_name||K.pname();
+b.boarded=true;b.boardAt=new Date().toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"});b.boardName=studentName;
 const tr=K.get("trips",[]);const t=tr.find(x=>x.id===b.id&&x.lineId===b.lineId);if(t)t.boarded=true;
 try{K.commit({bookings:bs,trips:tr,boardEv:{name:b.boardName,time:b.boardAt}})}catch(e){K.toast("لم تكتمل العملية؛ تعذّر حفظ الصعود التجريبي");return}
 if(isCloud()&&typeof cloud.pushAttendance==="function"){
   const att=K.attendance(b.lineId||lineId);
-  const st=att.find(s=>s.name===b.boardName)||att[0]||{id:"st_1",name:b.boardName,stop:"",code:KhattiCore.parentCode(K.pphone()),status:"boarded"};
-  cloud.pushAttendance({...st,status:"boarded"},b.lineId||lineId,KhattiCore.today()).then(ok=>{if(!ok)K.toast("تعذّر مزامنة الصعود سحابيًا؛ تم الحفظ محليًا")}).catch(()=>K.toast("تعذّر مزامنة الصعود سحابيًا؛ تم الحفظ محليًا"));
+  const matchedAtt=att.find(s=>(b.studentId&&s.id===b.studentId)||s.name===studentName)||null;
+  const localMe=K.get("me",null);
+  const fallbackStudent=matchedAtt||att[0]||(localMe&&{parentCode:localMe.parentCode||localMe.code})||null;
+  const parentCode=KhattiCore.resolveStudentParentCode(matchedAtt,b,fallbackStudent);
+  const baseSt=matchedAtt||att[0]||{id:b.studentId||"st_1",name:studentName,stop:b.pickup||""};
+  cloud.pushAttendance({...baseSt,name:studentName,code:parentCode,parent_code:parentCode,status:"boarded"},b.lineId||lineId,KhattiCore.today()).then(ok=>{if(!ok)K.toast("تعذّر مزامنة الصعود سحابيًا؛ تم الحفظ محليًا")}).catch(()=>K.toast("تعذّر مزامنة الصعود سحابيًا؛ تم الحفظ محليًا"));
 }
 K.toast("✅ تسجيل صعود تجريبي محلي — "+b.boardName);setTimeout(render,800)};
 $("#scan").onclick=()=>K.toast("📷 مسح QR متاح في النسخة الحقيقية — استخدم رمز PIN في النسخة التجريبية");
