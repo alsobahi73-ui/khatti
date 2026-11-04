@@ -32,7 +32,6 @@ const me=K.get("me",null);if(me)document.getElementById("sname").value=me.name||
 document.getElementById("send").onclick=()=>{
 const n=document.getElementById("sname").value.trim(),m=document.getElementById("smsg").value.trim();
 if(!n||!m){alert("اكتب اسمك ورسالتك أولًا");return}
-const box=K.get("support_msgs",[]);box.push({name:n,topic:document.getElementById("stopic").value,msg:m,at:new Date().toISOString()});try{K.set("support_msgs",box)}catch(e){return}
-document.getElementById("smsg").value="";document.getElementById("sok").style.display="block";};
+document.getElementById("smsg").value="";document.getElementById("sok").textContent="رسائل الدعم لا تُرسل من التطبيق بعد — للإبلاغ عن عطل استخدم نموذج الإبلاغ عن مشكلة في هذه الصفحة.";document.getElementById("sok").style.display="block";};
 </script>
 </body></html>
