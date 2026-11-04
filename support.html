@@ -22,11 +22,11 @@
 </div>
 </div>
 <a class="btn btn-g" href="index.html">→ رجوع للرئيسية</a>
-</main><footer class="app">خطّي — نموذج أولي • صُنع في العراق 🇮🇶</footer>
+</main><footer class="app">خطّي • <a href="privacy.html">الخصوصية</a> • <a href="terms.html">الشروط</a> • صُنع في العراق 🇮🇶</footer>
 </div>
 <script src="assets/data.js"></script><script src="assets/core.js"></script><script src="assets/demo.js"></script><script src="assets/auth.js"></script><script src="assets/cloud.js"></script><script src="assets/app.js"></script>
 <script>
-const FAQ=[["كيف أحجز مقعدًا؟","من واجهة الراكب ← ابحث عن خط ← اختر الخط ← احجز (يومي، أسبوعي، دفتر 10 رحلات، شهري، أو شهري بخصم طلاب)."],["كيف أدفع؟","خيارات الدفع معروضة للتجربة فقط؛ لا توجد خدمة دفع مرتبطة حاليًا."],["كيف يتابعني أهلي؟","بوابة الأهل الحالية محاكاة على الجهاز نفسه؛ لا يوجد ربط موثق أو مشاركة فعلية بين الهواتف."],["كيف أبلّغ عن مخالفة؟","يمكن حفظ بلاغ تجريبي محلي عن رحلة تجريبية مكتملة؛ لا يُرسل إلى مراجعين."],["أنا سائق، كيف أسجّل خطي؟","التسجيل والتوثيق والنشر حاليًا محاكاة محلية؛ لا توجد مراجعة وثائق بشرية مرتبطة بالتطبيق."]];
+const FAQ=[["كيف أحجز مقعدًا؟","من واجهة الراكب: ابحث عن خط، اختر الخط، ثم احجز واختر خطة الاشتراك ونقطة الصعود. عند تفعيل الاتصال السحابي يُحفظ الحجز في حسابك ويظهر للسائق؛ دون تفعيل يبقى الحجز على جهازك فقط."],["كيف أدفع؟","الدفع يدوي: نقدًا أو عبر Zain Cash أو Asia Hawala، ويؤكد السائق دفعك من لوحته. لا يوجد خصم آلي من أي حساب."],["كيف يتابعني أهلي؟","من صفحة ولي الأمر: أدخل كود الطالب وتابع موقعه أثناء نافذة الرحلة عند تفعيل الاتصال السحابي؛ دون تفعيل تعمل المتابعة على الجهاز نفسه فقط."],["واجهت عطلًا تقنيًا، كيف أبلّغ؟","استخدم زر الإبلاغ عن مشكلة في هذه الصفحة؛ يُرسل التقرير عند تفعيل الاتصال السحابي ويُحفظ محليًا دونه."],["أنا سائق، كيف أسجّل خطي؟","أنشئ حساب سائق وأكمل ملفك (صورة الرخصة مطلوبة)، ثم أنشئ خطك من لوحة السائق؛ لا يُنشر الخط إلا بعد موافقة الإدارة من لوحة التحكم."]];
 document.getElementById("faq").innerHTML=FAQ.map((f,i)=>`<div class="card" style="margin:8px 0;padding:10px"><b style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display=='none'?'block':'none'">▸ ${f[0]}</b><div style="display:none;margin-top:6px;font-size:14px">${f[1]}</div></div>`).join("");
 const me=K.get("me",null);if(me)document.getElementById("sname").value=me.name||"";
 document.getElementById("send").onclick=()=>{
