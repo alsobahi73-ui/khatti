@@ -4,7 +4,7 @@ function seedDemo(){
   K.set("trips",[{id:"t1",lineId:"l1",when:"07:00 – صباحاً",status:"done",rated:false}]);
   K.set("bookings",[]);
   K.set("reports",[]);
-  K.set("requests",[]);
+  K.set("holReqs",[]);
   K.set("pxRatings",{});
   K.set("broadcasts",[{
     id:"b_seed_1",
