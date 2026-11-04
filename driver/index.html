@@ -8,6 +8,7 @@
   const l=K.line(MYDRIVER.lineId);
   if(!l){K.missing();return;}
   let reviewBannerVisible=false;
+  let myLines=[];
 
   function render(){
     const att=K.attendance(l.id);
@@ -33,6 +34,25 @@
           <div class="stat"><b>${K.fmt(occ*l.price)}</b><span>الدخل الشهري المتوقع</span></div>
           <div class="stat"><b>${absentStudents.length}</b><span>غائبون اليوم</span></div>
         </div>
+      </div>
+
+      <div class="card" id="my-lines-card">
+        <h3>🚌 خطوطي</h3>
+        ${myLines.length===0?`
+          <div class="mut" style="margin-bottom:8px;">لا توجد خطوط سحابية مسجّلة باسمك بعد.</div>
+          <a class="btn btn-a" id="btn-create-first-line" href="line-edit.html?new=1">➕ أنشئ خطك الأول</a>
+        `:myLines.map(ml=>`
+          <div class="card" style="margin-bottom:8px;padding:10px;background:#f8fafc;">
+            <div class="row" style="gap:8px;flex-wrap:wrap;">
+              <div>
+                <b>${K.esc(ml.from)} ↔ ${K.esc(ml.to)}</b>
+                <div class="mut">${K.esc(ml.vehicle||"")} • 💺 ${ml.free}/${ml.seats} شاغر • ${K.fmt(ml.price)}</div>
+              </div>
+              <span class="grow"></span>
+              <a class="btn btn-p" href="line-edit.html?id=${encodeURIComponent(ml.id)}" style="margin-top:0;width:auto;">✏️ تحرير</a>
+            </div>
+          </div>
+        `).join("")}
       </div>
 
       <div class="card">
@@ -111,7 +131,17 @@
     const auth=window.KhattiAuth;
     if(!cloud||typeof cloud.isConfigured!=="function"||!cloud.isConfigured())return;
     const sess=auth&&typeof auth.readStoredSession==="function"?auth.readStoredSession():null;
-    if(!sess||!sess.user||sess.user.role!=="driver")return;
+    if(!sess||!sess.user||!sess.user.id)return;
+    if(typeof cloud.fetchLines==="function"){
+      try{
+        const allLines=await cloud.fetchLines();
+        if(Array.isArray(allLines)){
+          myLines=allLines.filter(x=>x&&String(x.driver_id||x.driverId||"")===String(sess.user.id));
+          render();
+        }
+      }catch(_){}
+    }
+    if(sess.user.role!=="driver")return;
     const profile=typeof cloud.getDriverProfile==="function"?await cloud.getDriverProfile(sess.user.id):null;
     if(!profile||profile.status!=="approved"){
       reviewBannerVisible=true;
