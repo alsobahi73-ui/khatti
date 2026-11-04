@@ -168,6 +168,34 @@ create table if not exists public.khatti_notify_requests (
   created_at timestamptz default now()
 );
 
+-- 10. جدول اشتراكات السائقين اليدوية (Driver Subscriptions)
+-- تُطبَّق بعد نشر الكود فقط، لا قبله
+-- ملاحظة: التأكيد وتغيير الحالة (status) وتواريخ البدء والانتهاء (starts_at / ends_at) للإدارة عبر لوحة التحكم فقط.
+create table if not exists public.khatti_driver_subscriptions (
+  id text primary key,
+  driver_id uuid not null,
+  plan_label text,
+  months integer,
+  amount integer,
+  pay_method text check (pay_method in ('cash', 'zain', 'asia')),
+  pay_ref text,
+  status text check (status in ('pending', 'confirmed', 'rejected')) default 'pending',
+  starts_at timestamptz,
+  ends_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- 11. جدول تقارير الأخطاء داخل التطبيق (In-App Error Reports)
+-- تُطبَّق بعد نشر الكود فقط، لا قبله
+create table if not exists public.khatti_error_reports (
+  id text primary key,
+  user_id uuid,
+  page text,
+  message text not null,
+  details text,
+  created_at timestamptz default now()
+);
+
 -- ============================================================================
 -- تُطبَّق بعد نشر الكود فقط، لا قبله
 -- ============================================================================
@@ -181,6 +209,8 @@ alter table public.khatti_ratings enable row level security;
 alter table public.khatti_driver_profiles enable row level security;
 alter table public.khatti_chat_messages enable row level security;
 alter table public.khatti_notify_requests enable row level security;
+alter table public.khatti_driver_subscriptions enable row level security;
+alter table public.khatti_error_reports enable row level security;
 
 -- ترقية الأعمدة الأمنية الإضافية (قابلة لإعادة التشغيل)
 alter table public.khatti_ratings add column if not exists rater_user_id uuid;
@@ -469,6 +499,31 @@ drop policy if exists "khatti_notify_requests_delete_own" on public.khatti_notif
 create policy "khatti_notify_requests_delete_own" on public.khatti_notify_requests
   for delete to authenticated
   using (user_id = auth.uid());
+
+-- سياسات khatti_driver_subscriptions (تُطبَّق بعد نشر الكود فقط، لا قبله):
+-- قراءة/إدراج لصاحب الاشتراك نفسه (driver_id = auth.uid()) فقط؛
+-- لا توجد سياسة تعديل (UPDATE) أو حذف (DELETE) لأن تأكيد الاشتراك وتغيير الحالة (pending -> confirmed / rejected) يُترك للإدارة عبر لوحة التحكم فقط.
+drop policy if exists "khatti_driver_subscriptions_select_own" on public.khatti_driver_subscriptions;
+create policy "khatti_driver_subscriptions_select_own" on public.khatti_driver_subscriptions
+  for select to authenticated
+  using (driver_id = auth.uid());
+
+drop policy if exists "khatti_driver_subscriptions_insert_own" on public.khatti_driver_subscriptions;
+create policy "khatti_driver_subscriptions_insert_own" on public.khatti_driver_subscriptions
+  for insert to authenticated
+  with check (driver_id = auth.uid());
+
+-- سياسات khatti_error_reports (تُطبَّق بعد نشر الكود فقط، لا قبله):
+-- إدراج لأي موثّق (user_id = auth.uid())، وقراءة لصاحب التقرير فقط (user_id = auth.uid()).
+drop policy if exists "khatti_error_reports_select_own" on public.khatti_error_reports;
+create policy "khatti_error_reports_select_own" on public.khatti_error_reports
+  for select to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists "khatti_error_reports_insert_own" on public.khatti_error_reports;
+create policy "khatti_error_reports_insert_own" on public.khatti_error_reports
+  for insert to authenticated
+  with check (user_id = auth.uid());
 
 -- M1: منع تعديل حالة ملف السائق ذاتيًا (تغيير status متاح للإدارة عبر لوحة التحكم فقط)
 create or replace function public.prevent_driver_profile_status_self_update()
