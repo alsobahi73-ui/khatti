@@ -5,6 +5,8 @@
 <div class="field"><label for="gov">المحافظة</label><select id="gov" aria-controls="area"></select></div>
 <div class="field"><label for="area">المدينة / المنطقة</label><select id="area"><option value="">كل المدن والمناطق</option></select><div class="mut" id="cities-status" role="status" aria-live="polite"></div></div>
 <div class="field"><label for="uni">الجهة (جامعة / دائرة)</label><select id="uni"><option value="">كل الجهات</option></select></div>
+<div class="field"><label for="max-price">الحد الأقصى للسعر (د.ع)</label><input id="max-price" type="number" min="0" step="5000" placeholder="بلا حد أقصى"></div>
+<div class="field"><label for="min-rating">الحد الأدنى للتقييم</label><input id="min-rating" type="number" min="1" max="5" step="0.1" placeholder="كل التقييمات"></div>
 <div class="chips" id="fcomp">
 <button aria-pressed="true" class="chip on" data-c="">الكل</button><button aria-pressed="false" class="chip" data-c="girls">بنات فقط</button><button aria-pressed="false" class="chip" data-c="boys">شباب فقط</button><button aria-pressed="false" class="chip" data-c="mixed">مختلط</button>
 </div>
@@ -12,17 +14,18 @@
 <button class="btn btn-g" id="pinmode">📍 بحث بالدبوس — ضع دبوس بيتك على الخريطة</button>
 </div>
 <div class="card" id="pinbox" style="display:none"><h3>ضع دبوس بيتك</h3><div class="mapbox" id="pmap"></div><div class="mut" style="margin-top:6px">اضغط على الخريطة لتحديد موقعك — ستُرتّب الخطوط حسب القرب منك.</div></div>
+<div id="availability-banners"></div>
 <div id="results"></div>
 <div id="notify" style="display:none" class="card"><h3>لا توجد خطوط مطابقة 😕</h3><p class="mut">لا توجد خطوط تجريبية مطابقة. احفظ طلبًا محليًا للتجربة فقط؛ لا تُرسل إشعارات فعلية.</p><button class="btn btn-a" id="notifybtn">حفظ طلب تجريبي</button></div>
 </main></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="../assets/data.js"></script><script src="../assets/locations.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/cloud.js"></script><script src="../assets/data-source.js"></script><script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script><script src="../assets/locations.js"></script><script src="../assets/core.js"></script><script src="../assets/demo.js"></script><script src="../assets/auth.js"></script><script src="../assets/cloud.js"></script><script src="../assets/data-source.js"></script><script src="../assets/app.js"></script>
 <script>
 (async function(){
 if(!K.access())return;
 K.page("بحث عن خط","../index.html");
 K.holBanner();
-const area=$("#area"),uni=$("#uni");
+const area=$("#area"),uni=$("#uni"),maxPriceEl=$("#max-price"),minRatingEl=$("#min-rating");
 const governorate=document.getElementById('gov');
 KhattiLocations.forEach(g=>governorate.add(new Option(g.name,g.name)));
 function selectedLocation(){return KhattiLocations.find(g=>g.name===governorate.value)||KhattiLocations[0]}
@@ -30,24 +33,80 @@ function updateCities(){const region=selectedLocation();area.replaceChildren(new
 updateCities();
 const loadedLines=await loadLines();
 [...new Set(loadedLines.map(l=>l.to))].forEach(u=>uni.add(new Option(u,u)));
+
+/* التنبيه داخل التطبيق فقط في هذه الشريحة؛ لا رسائل SMS أو واتساب لأنها تحتاج مزودًا خارجيًا */
+const cloud=window.KhattiCloud;
+const isCloud=()=>Boolean(cloud&&typeof cloud.isConfigured==="function"&&cloud.isConfigured());
+let notifyReqs=K.get("lineNotifyReqs",[]);
+if(isCloud()&&typeof cloud.pullNotifyRequests==="function"){
+ try{
+  const remoteReqs=await cloud.pullNotifyRequests();
+  if(Array.isArray(remoteReqs)&&remoteReqs.length>0){
+   notifyReqs=remoteReqs.concat(notifyReqs);
+  }
+ }catch(_){}
+}
+function renderAvailabilityBanners(){
+ const box=$("#availability-banners");
+ if(!box)return;
+ const effectiveLines=loadedLines.map(l=>K.line(l.id)||l);
+ const uid=(cloud&&typeof cloud._getSessionUserId==="function")?cloud._getSessionUserId():"";
+ const banners=KhattiCore.getAvailabilityBanners(effectiveLines,notifyReqs,uid);
+ box.innerHTML=banners.map(b=>`<div class="alert ok availability-banner" role="status" style="margin-bottom:8px;">🔔 ${K.esc(b.msg)}</div>`).join("");
+}
+renderAvailabilityBanners();
+
 let fc="",pin=null,pmap=null,pinMk=null;
 $("#fcomp").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;$$("#fcomp .chip").forEach(c=>{c.classList.remove("on");c.setAttribute("aria-pressed","false")});b.classList.add("on");b.setAttribute("aria-pressed","true");fc=b.dataset.c;doSearch()});
 $("#go").onclick=doSearch;$("#gov").onchange=()=>{updateCities();uni.value='';pin=null;if(pinMk){pinMk.remove();pinMk=null}if(pmap)pmap.setView(selectedLocation().center,11);doSearch()};
 area.onchange=doSearch;uni.onchange=doSearch;
+if(maxPriceEl){maxPriceEl.oninput=doSearch;maxPriceEl.onchange=doSearch;}
+if(minRatingEl){minRatingEl.oninput=doSearch;minRatingEl.onchange=doSearch;}
 function doSearch(){
  const g=$("#gov").value;const box=$("#results"),nt=$("#notify");box.innerHTML="";
  if(g!=="بغداد"){nt.style.display="block";return}
  let ls=loadedLines.map(l=>K.line(l.id)||l);
- if(area.value)ls=ls.filter(l=>l.from===area.value);
- if(uni.value)ls=ls.filter(l=>l.to===uni.value);
- if(fc)ls=ls.filter(l=>l.comp===fc);
+ ls=KhattiCore.filterLines(ls,{
+  area:area.value,
+  uni:uni.value,
+  comp:fc,
+  maxPrice:maxPriceEl?maxPriceEl.value:"",
+  minRating:minRatingEl?minRatingEl.value:""
+ });
  ls=KhattiCore.sortLines(ls,pin);
  const distanceNote=pin?'<div class="note">📍 مرتبة حسب القرب من بداية المسار التجريبي'+(ls[0]?` — أقرب خط على بعد ${ls[0]._d.toFixed(1)} كم`:"")+'</div>':"";
  if(!ls.length){nt.style.display="block";return}
  nt.style.display="none";
 
- box.innerHTML=distanceNote+ls.map(l=>K.lineCard(l)).join("");
+ box.innerHTML=distanceNote+ls.map(l=>K.lineCard(l)+(Number(l.free)<=0?`<div class="row" style="margin:-4px 0 10px;"><button type="button" class="btn btn-a notify-avail-btn" data-line-id="${K.esc(l.id)}">أعلمني عند التوفر</button></div>`:"")).join("");
 }
+$("#results").addEventListener("click",async e=>{
+ const btn=e.target.closest(".notify-avail-btn");
+ if(!btn)return;
+ const lineId=btn.getAttribute("data-line-id")||"";
+ if(!lineId)return;
+ if(isCloud()&&typeof cloud.pushNotifyRequest==="function"){
+  btn.disabled=true;
+  const ok=await cloud.pushNotifyRequest(lineId);
+  btn.disabled=false;
+  if(!ok){K.toast("تعذّر حفظ طلب التنبيه سحابيًا؛ تحقق من الصلاحيات أو الاتصال");return;}
+  const local=K.get("lineNotifyReqs",[]);
+  if(!local.some(r=>(r.line_id||r.lineId)===lineId)){
+   local.push({line_id:lineId,lineId,created_at:new Date().toISOString()});
+   K.set("lineNotifyReqs",local);
+  }
+  notifyReqs=K.get("lineNotifyReqs",[]);
+  K.toast("تم تسجيل طلب التنبيه عند التوفر سحابيًا");
+  return;
+ }
+ const local=K.get("lineNotifyReqs",[]);
+ if(!local.some(r=>(r.line_id||r.lineId)===lineId)){
+  local.push({line_id:lineId,lineId,created_at:new Date().toISOString()});
+  K.set("lineNotifyReqs",local);
+ }
+ notifyReqs=local;
+ K.toast("حُفظ طلب التنبيه عند التوفر محليًا");
+});
 $("#pinmode").onclick=()=>{const b=$("#pinbox");b.style.display=b.style.display==="none"?"block":"none";
  if(b.style.display==="block"&&!pmap){pmap=K.map("pmap",selectedLocation().center,11);
   if(pmap)pmap.on("click",e=>{pin=[e.latlng.lat,e.latlng.lng];if(pinMk)pinMk.setLatLng(e.latlng);else pinMk=L.marker(e.latlng).addTo(pmap).bindPopup("بيتي").openPopup();doSearch()})}};
