@@ -31,30 +31,12 @@ create table if not exists public.khatti_lines (
 alter table public.khatti_lines add column if not exists verified boolean default false;
 alter table public.khatti_lines add column if not exists driver_id uuid;
 
--- دالة ذرية لحجز المقاعد سحابيًا ومنع الحجز الزائد (Overbooking Protection)
-create or replace function public.reserve_seat(p_line_id text, p_seats int)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if p_seats is null or p_seats <= 0 then
-    return false;
-  end if;
-  update public.khatti_lines
-  set free = free - p_seats
-  where id = p_line_id and free >= p_seats;
-  return found;
-end;
-$$;
-
-revoke execute on function public.reserve_seat(text, int) from anon;
-grant execute on function public.reserve_seat(text, int) to authenticated;
+-- تنظيف (أ-3): دالة الحجز القديمة غير الذرية محذوفة — لا يستدعيها أي كود بعد الآن
+drop function if exists public.reserve_seat(text, int);
 
 -- 2. جدول التتبع اللحظي المباشر لحركة ومكان السائق والراكب (Live GPS Locations)
 create table if not exists public.khatti_live_locations (
-  id text primary key, -- مثال: 'l1_driver' أو 'l1_pax_st_1'
+  id text primary key, -- مثال: 'l1_driver_main' أو 'l1_pax_<device>'
   line_id text not null,
   user_role text not null check (user_role in ('driver', 'passenger')),
   user_name text not null,
@@ -251,6 +233,8 @@ begin
   if auth.uid() is not null then
     if tg_op = 'INSERT' then
       NEW.verified := false;
+      NEW.rc := 1;
+      NEW.trusted := false;
     elsif tg_op = 'UPDATE' then
       NEW.verified := OLD.verified;
       NEW.rating := OLD.rating;
@@ -266,6 +250,43 @@ drop trigger if exists trg_khatti_lines_enforce_trust on public.khatti_lines;
 create trigger trg_khatti_lines_enforce_trust
   before insert or update on public.khatti_lines
   for each row execute function public.enforce_khatti_lines_trust();
+
+-- إصلاح أمني (أ-2): إنشاء/تعديل الخط للسائقين المعتمدين فقط (الموافقة من الإدارة عبر لوحة التحكم)
+create or replace function public.enforce_khatti_lines_approved_driver()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null and not exists (
+    select 1 from public.khatti_driver_profiles
+    where user_id = auth.uid() and status = 'approved'
+  ) then
+    raise exception 'إنشاء الخط متاح للسائقين المعتمدين فقط';
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_khatti_lines_require_approved_driver on public.khatti_lines;
+create trigger trg_khatti_lines_require_approved_driver
+  before insert or update on public.khatti_lines
+  for each row execute function public.enforce_khatti_lines_approved_driver();
+
+-- إصلاح (م-11): قيود عددية على الخطوط
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'chk_khatti_lines_seats_range') then
+    alter table public.khatti_lines add constraint chk_khatti_lines_seats_range check (seats between 1 and 60);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'chk_khatti_lines_free_range') then
+    alter table public.khatti_lines add constraint chk_khatti_lines_free_range check (free between 0 and seats);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'chk_khatti_lines_price_nonneg') then
+    alter table public.khatti_lines add constraint chk_khatti_lines_price_nonneg check (price >= 0);
+  end if;
+end;
+$$;
 
 -- سياسات khatti_bookings: قراءة وتعديل لصاحب الحجز أو سائق الخط؛ إدراج وحذف لصاحب الحجز فقط
 drop policy if exists "khatti_bookings_select_auth" on public.khatti_bookings;
@@ -307,10 +328,47 @@ create policy "khatti_bookings_delete_own" on public.khatti_bookings
   for delete to authenticated
   using (user_id = auth.uid());
 
--- H3: سياسات khatti_live_locations: قراءة عامة (تتبع الأهل أثناء الرحلة)؛ والكتابة حسب الدور (السائق مالك الخط أو الراكب صاحب الصف)
+-- إصلاح (م-10): منع تغيير الخط أو مالك الحجز عند التعديل، وقصر تغيير حالة الدفع على سائق الخط
+create or replace function public.guard_khatti_booking_update()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null then
+    NEW.line_id := OLD.line_id;
+    NEW.user_id := OLD.user_id;
+    if OLD.pay_status is distinct from NEW.pay_status and not exists (
+      select 1 from public.khatti_lines l
+      where l.id = OLD.line_id and l.driver_id = auth.uid()
+    ) then
+      NEW.pay_status := OLD.pay_status;
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_khatti_bookings_guard_update on public.khatti_bookings;
+create trigger trg_khatti_bookings_guard_update
+  before update on public.khatti_bookings
+  for each row execute function public.guard_khatti_booking_update();
+
+-- إصلاح أمني (أ-1): سياسات khatti_live_locations: قراءة للمشاركين فقط (سائق الخط أو صاحب حجز عليه)؛ تتبع الأهل عبر دالة get_driver_location_for_parent بكود الطالب؛ والكتابة حسب الدور (السائق مالك الخط أو الراكب صاحب الصف مع حجز على الخط)
 drop policy if exists "khatti_live_locations_select_public" on public.khatti_live_locations;
-create policy "khatti_live_locations_select_public" on public.khatti_live_locations
-  for select using (true);
+drop policy if exists "khatti_live_locations_select_participants" on public.khatti_live_locations;
+create policy "khatti_live_locations_select_participants" on public.khatti_live_locations
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.khatti_lines l
+      where l.id = khatti_live_locations.line_id and l.driver_id = auth.uid()
+    )
+    or exists (
+      select 1 from public.khatti_bookings b
+      where b.line_id = khatti_live_locations.line_id and b.user_id = auth.uid()
+    )
+  );
 
 drop policy if exists "khatti_live_locations_insert_auth" on public.khatti_live_locations;
 create policy "khatti_live_locations_insert_auth" on public.khatti_live_locations
@@ -321,7 +379,10 @@ create policy "khatti_live_locations_insert_auth" on public.khatti_live_location
       where l.id = khatti_live_locations.line_id and l.driver_id = auth.uid()
     ))
     or
-    (user_role = 'passenger' and user_id = auth.uid())
+    (user_role = 'passenger' and user_id = auth.uid() and exists (
+      select 1 from public.khatti_bookings b
+      where b.line_id = khatti_live_locations.line_id and b.user_id = auth.uid()
+    ))
   );
 
 drop policy if exists "khatti_live_locations_update_auth" on public.khatti_live_locations;
@@ -355,6 +416,18 @@ create policy "khatti_live_locations_delete_auth" on public.khatti_live_location
     or
     (user_role = 'passenger' and user_id = auth.uid())
   );
+
+-- إصلاح (م-4): صيغة معرّف صف الموقع مرتبطة بالدور — يمنع حجز معرّف صف السائق من راكب
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'chk_khatti_locations_id_role') then
+    alter table public.khatti_live_locations add constraint chk_khatti_locations_id_role check (
+      (user_role = 'driver' and id = line_id || '_driver_main')
+      or (user_role = 'passenger' and id like line_id || '\_pax\_%' escape '\')
+    );
+  end if;
+end;
+$$;
 
 -- سياسات khatti_attendance: كل العمليات للسائق صاحب الخط فقط (وغياب الراكب يمر عبر دالة mark_absent الآمنة)
 drop policy if exists "khatti_attendance_driver_all" on public.khatti_attendance;
@@ -439,26 +512,12 @@ create policy "khatti_driver_profiles_update_own" on public.khatti_driver_profil
   for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- سياسات khatti_chat_messages (تُطبَّق بعد نشر الكود فقط، لا قبله):
--- قراءة وإدراج للموثّقين المشاركين فقط (صاحب حجز على الخط أو سائق الخط) مع sender_user_id = auth.uid() عند الإدراج
+-- قراءة وإدراج للموثّقين المشاركين فقط (صاحب حجز على الخط أو سائق الخط) مع sender_user_id = auth.uid() عند الإدراج، وضمن يوم الرحلة فقط (بتوقيت بغداد)
 drop policy if exists "khatti_chat_messages_select_participants" on public.khatti_chat_messages;
 create policy "khatti_chat_messages_select_participants" on public.khatti_chat_messages
   for select to authenticated
   using (
-    exists (
-      select 1 from public.khatti_bookings b
-      where b.line_id = khatti_chat_messages.line_id and b.user_id = auth.uid()
-    )
-    or exists (
-      select 1 from public.khatti_lines l
-      where l.id = khatti_chat_messages.line_id and l.driver_id = auth.uid()
-    )
-  );
-
-drop policy if exists "khatti_chat_messages_insert_participants" on public.khatti_chat_messages;
-create policy "khatti_chat_messages_insert_participants" on public.khatti_chat_messages
-  for insert to authenticated
-  with check (
-    sender_user_id = auth.uid()
+    trip_date = to_char(now() at time zone 'Asia/Baghdad', 'YYYY-MM-DD')
     and (
       exists (
         select 1 from public.khatti_bookings b
@@ -470,6 +529,61 @@ create policy "khatti_chat_messages_insert_participants" on public.khatti_chat_m
       )
     )
   );
+
+drop policy if exists "khatti_chat_messages_insert_participants" on public.khatti_chat_messages;
+create policy "khatti_chat_messages_insert_participants" on public.khatti_chat_messages
+  for insert to authenticated
+  with check (
+    sender_user_id = auth.uid()
+    and trip_date = to_char(now() at time zone 'Asia/Baghdad', 'YYYY-MM-DD')
+    and (
+      exists (
+        select 1 from public.khatti_bookings b
+        where b.line_id = khatti_chat_messages.line_id and b.user_id = auth.uid()
+      )
+      or exists (
+        select 1 from public.khatti_lines l
+        where l.id = khatti_chat_messages.line_id and l.driver_id = auth.uid()
+      )
+    )
+  );
+
+-- إصلاح (م-8): فرض هوية مرسل المحادثة خادميًا — الدور من ملكية الخط، والاسم من الملف أو آخر حجز
+create or replace function public.enforce_khatti_chat_sender()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_is_driver boolean;
+  v_name text;
+begin
+  if auth.uid() is not null then
+    NEW.sender_user_id := auth.uid();
+    select exists (
+      select 1 from public.khatti_lines l
+      where l.id = NEW.line_id and l.driver_id = auth.uid()
+    ) into v_is_driver;
+    if v_is_driver then
+      NEW.sender_role := 'driver';
+      select name into v_name from public.khatti_driver_profiles where user_id = auth.uid() limit 1;
+      NEW.sender_name := coalesce(nullif(btrim(coalesce(v_name, '')), ''), 'السائق');
+    else
+      NEW.sender_role := 'passenger';
+      select passenger_name into v_name from public.khatti_bookings
+      where line_id = NEW.line_id and user_id = auth.uid()
+      order by created_at desc limit 1;
+      NEW.sender_name := coalesce(nullif(btrim(coalesce(v_name, '')), ''), 'راكب');
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_khatti_chat_enforce_sender on public.khatti_chat_messages;
+create trigger trg_khatti_chat_enforce_sender
+  before insert on public.khatti_chat_messages
+  for each row execute function public.enforce_khatti_chat_sender();
 
 -- سياسات khatti_notify_requests (تُطبَّق بعد نشر الكود فقط، لا قبله):
 -- إدراج/قراءة لصاحب الطلب نفسه، وقراءة لسائق الخط
@@ -500,6 +614,26 @@ create policy "khatti_notify_requests_delete_own" on public.khatti_notify_reques
   for delete to authenticated
   using (user_id = auth.uid());
 
+-- إصلاح (ل-4): منع تغيير الخط أو مالك طلب التنبيه عند التعديل
+create or replace function public.guard_khatti_notify_update()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null then
+    NEW.line_id := OLD.line_id;
+    NEW.user_id := OLD.user_id;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_khatti_notify_guard_update on public.khatti_notify_requests;
+create trigger trg_khatti_notify_guard_update
+  before update on public.khatti_notify_requests
+  for each row execute function public.guard_khatti_notify_update();
+
 -- سياسات khatti_driver_subscriptions (تُطبَّق بعد نشر الكود فقط، لا قبله):
 -- قراءة/إدراج لصاحب الاشتراك نفسه (driver_id = auth.uid()) فقط؛
 -- لا توجد سياسة تعديل (UPDATE) أو حذف (DELETE) لأن تأكيد الاشتراك وتغيير الحالة (pending -> confirmed / rejected) يُترك للإدارة عبر لوحة التحكم فقط.
@@ -513,6 +647,27 @@ create policy "khatti_driver_subscriptions_insert_own" on public.khatti_driver_s
   for insert to authenticated
   with check (driver_id = auth.uid());
 
+-- إصلاح (م-3): فرض حالة pending وتواريخ فارغة على أي إدراج اشتراك من مستخدم موثّق
+create or replace function public.force_khatti_subscription_pending()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null then
+    NEW.status := 'pending';
+    NEW.starts_at := null;
+    NEW.ends_at := null;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_khatti_subscriptions_force_pending on public.khatti_driver_subscriptions;
+create trigger trg_khatti_subscriptions_force_pending
+  before insert on public.khatti_driver_subscriptions
+  for each row execute function public.force_khatti_subscription_pending();
+
 -- سياسات khatti_error_reports (تُطبَّق بعد نشر الكود فقط، لا قبله):
 -- إدراج لأي موثّق (user_id = auth.uid())، وقراءة لصاحب التقرير فقط (user_id = auth.uid()).
 drop policy if exists "khatti_error_reports_select_own" on public.khatti_error_reports;
@@ -524,6 +679,28 @@ drop policy if exists "khatti_error_reports_insert_own" on public.khatti_error_r
 create policy "khatti_error_reports_insert_own" on public.khatti_error_reports
   for insert to authenticated
   with check (user_id = auth.uid());
+
+-- إصلاح (ل-3): سقف 20 تقرير خطأ يوميًا لكل مستخدم موثّق
+create or replace function public.limit_khatti_error_reports()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null and (
+    select count(*) from public.khatti_error_reports
+    where user_id = auth.uid() and created_at >= now() - interval '1 day'
+  ) >= 20 then
+    raise exception 'تم تجاوز الحد اليومي لتقارير الأخطاء';
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_khatti_error_reports_rate_limit on public.khatti_error_reports;
+create trigger trg_khatti_error_reports_rate_limit
+  before insert on public.khatti_error_reports
+  for each row execute function public.limit_khatti_error_reports();
 
 -- M1: منع تعديل حالة ملف السائق ذاتيًا (تغيير status متاح للإدارة عبر لوحة التحكم فقط)
 create or replace function public.prevent_driver_profile_status_self_update()
@@ -544,6 +721,25 @@ create trigger trg_khatti_driver_profiles_lock_status
   before update on public.khatti_driver_profiles
   for each row execute function public.prevent_driver_profile_status_self_update();
 
+-- إصلاح (م-2): فرض حالة pending على أي إدراج ملف سائق من مستخدم موثّق (مع قفل التعديل أعلاه، لا اعتماد ذاتي أبدًا)
+create or replace function public.force_khatti_driver_profile_pending()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null then
+    NEW.status := 'pending';
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_khatti_driver_profiles_force_pending on public.khatti_driver_profiles;
+create trigger trg_khatti_driver_profiles_force_pending
+  before insert on public.khatti_driver_profiles
+  for each row execute function public.force_khatti_driver_profile_pending();
+
 -- H1: سحب صلاحية قراءة عمود phone من anon ومن authenticated داخل كتلة DO آمنة
 do $$
 begin
@@ -554,36 +750,46 @@ exception
 end;
 $$;
 
--- H1: دالة آمنة لإعادة هاتف الخط فقط لسائق الخط أو لصاحب حجز عليه
-create or replace function public.get_line_phone(p_line_id text)
-returns text
-language plpgsql
+-- تنظيف (ك-1): دالة كشف الهاتف محذوفة — لا يستدعيها أي كود بعد الآن
+drop function if exists public.get_line_phone(text);
+
+-- إصلاح أمني (أ-1): عرض الأهل عبر دالتي كود الطالب (تعملان بدور مالك الجدول، دون كشف جدول المواقع؛ كود الطالب في السحابة هو parent_code)
+create or replace function public.get_parent_view(p_parent_code text)
+returns table(line_id text, student_name text, student_code text, status text, trip_date text)
+language sql
 security definer
 set search_path = public
+stable
 as $$
-declare
-  v_phone text;
-begin
-  if auth.uid() is null or p_line_id is null or btrim(p_line_id) = '' then
-    return null;
-  end if;
-  select l.phone into v_phone
-  from public.khatti_lines l
-  where l.id = p_line_id
-    and (
-      l.driver_id = auth.uid()
-      or exists (
-        select 1 from public.khatti_bookings b
-        where b.line_id = l.id and b.user_id = auth.uid()
-      )
-    )
+  select a.line_id, a.student_name, a.parent_code, a.status, a.trip_date
+  from public.khatti_attendance a
+  where a.parent_code = p_parent_code
+  order by a.trip_date desc, a.updated_at desc
   limit 1;
-  return v_phone;
-end;
 $$;
 
-revoke execute on function public.get_line_phone(text) from anon;
-grant execute on function public.get_line_phone(text) to authenticated;
+grant execute on function public.get_parent_view(text) to anon, authenticated;
+
+create or replace function public.get_driver_location_for_parent(p_parent_code text)
+returns table(id text, line_id text, lat double precision, lng double precision, speed double precision, updated_at timestamptz)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select l.id, l.line_id, l.lat, l.lng, l.speed, l.updated_at
+  from public.khatti_live_locations l
+  where l.user_role = 'driver'
+    and l.line_id = (
+      select a.line_id from public.khatti_attendance a
+      where a.parent_code = p_parent_code
+      order by a.trip_date desc, a.updated_at desc
+      limit 1
+    )
+  limit 1;
+$$;
+
+grant execute on function public.get_driver_location_for_parent(text) to anon, authenticated;
 
 -- H4: دالة ذرية لإنشاء الحجز وخصم المقاعد مع أخذ user_id من auth.uid() حصرًا
 create or replace function public.create_booking_atomic(
@@ -615,7 +821,11 @@ begin
     return null;
   end if;
   v_seat_count := jsonb_array_length(p_seats);
-  if v_seat_count < 1 then
+  if v_seat_count < 1 or v_seat_count > 3 then
+    return null;
+  end if;
+  if (select count(*) from jsonb_array_elements_text(p_seats))
+     <> (select count(distinct x) from jsonb_array_elements_text(p_seats) as x) then
     return null;
   end if;
 
@@ -643,8 +853,8 @@ begin
     coalesce(p_pickup, ''),
     coalesce(p_return_shift, '14:30'),
     'upcoming',
-    coalesce(p_pay_method, 'cash'),
-    coalesce(p_pay_status, 'pending'),
+    case when coalesce(p_pay_method, 'cash') in ('cash', 'zaincash', 'asiahawala') then coalesce(p_pay_method, 'cash') else 'cash' end,
+    'pending',
     coalesce(p_pay_ref, '')
   );
 
@@ -723,6 +933,15 @@ begin
   v_digits := regexp_replace(coalesce(v_booking.phone, ''), '\D', '', 'g');
   v_parent_code := 'KH-' || coalesce(nullif(right(v_digits, 4), ''), '4829');
 
+  -- إصلاح (م-9): لا يكتب الغياب فوق صعود/وصول سجّله السائق
+  if exists (
+    select 1 from public.khatti_attendance
+    where student_id = p_student_id and trip_date = p_trip_date and line_id = p_line_id
+      and status in ('boarded', 'arrived')
+  ) then
+    return false;
+  end if;
+
   insert into public.khatti_attendance (
     student_id, line_id, student_name, stop_name, parent_code, status, trip_date, user_id, updated_at
   ) values (
@@ -748,10 +967,7 @@ $$;
 revoke execute on function public.mark_absent(text, text, text) from anon;
 grant execute on function public.mark_absent(text, text, text) to authenticated;
 
--- تفعيل البث اللحظي المباشر عبر WebSockets (Supabase Realtime)
-alter publication supabase_realtime add table public.khatti_live_locations;
-alter publication supabase_realtime add table public.khatti_attendance;
-alter publication supabase_realtime add table public.khatti_broadcasts;
+-- ملاحظة: لا يستخدم التطبيق Supabase Realtime (التتبع استطلاع HTTP فقط)؛ أُزيلت الجداول من المنشور
 
 -- إدراج بيانات أولية للخط الأول
 insert into public.khatti_lines (id, from_area, to_dest, driver_name, phone, vehicle, plate, comp, price, seats, free, go_time, back_time, pickups)
